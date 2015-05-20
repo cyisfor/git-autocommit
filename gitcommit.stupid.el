@@ -1,15 +1,6 @@
 (require 'types)
 
-(defmacro with-directory (directory &rest body)
-  `(let ((old default-directory))
-     (unwind-protect
-         (progn
-           (cd ,directory)
-           ,@body)
-       (cd old))))
-
 (defun maybe-git-commit ()
-  (interactive)
   (shell-command
    (concat
     ". ~/code/maybegitcommit.sh "
@@ -21,5 +12,6 @@
 
 (dolist (type (append edity-types programmy-types))
   (add-hook (type->hook type) 'gitcommit-enhooken))
+
 
 (provide 'gitcommit)
