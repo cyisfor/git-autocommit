@@ -13,17 +13,11 @@
   (let* ((buffer (get-buffer-create "*Git Commit Thingy*"))
 		 (process (get-buffer-process buffer)))
 	(message "Process %s %s" process (buffer-file-name))
-	(if process
-		(message "Already committing... try later")
-	  (progn
-		(setenv "file" (buffer-file-name))
-		(start-process "Git Commit Thingy"
-					   buffer
-					   ;; these are in simple.el vvv
-					   shell-file-name
-					   shell-command-switch 
-					   ". ~/code/maybegitcommit.sh")
-		(setenv "file")))))
+	(setenv "file" (buffer-file-name))
+	(start-process "Git Commit Thingy"
+				   buffer
+				   (expand-file-name "~/code/git/maybecommit.py"))
+	(setenv "file")))
 
 (defun gitcommit-enhooken ()
   (set (make-local-variable 'backup-inhibited) t)
