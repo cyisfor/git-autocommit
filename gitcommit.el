@@ -23,7 +23,10 @@
   (set (make-local-variable 'backup-inhibited) t)
   (add-hook 'after-save-hook 'maybe-git-commit nil t))
 
-(dolist (type (append edity-types programmy-types))
+(dolist (type (append edity-types))
   (add-hook (type->hook type) 'gitcommit-enhooken))
+
+(add-hook 'prog-mode-hook 'gitcommit-enhooken)
+
 
 (provide 'gitcommit)
