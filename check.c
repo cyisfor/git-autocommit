@@ -8,7 +8,6 @@
 #include <stdint.h> // uint*
 #include <sys/wait.h> // waitpid
 
-
 typedef uint16_t u16;
 
 static void waitfor(int pid) {
@@ -97,7 +96,7 @@ void check_accept(uv_stream_t* server) {
 	uv_read_start((uv_stream_t*)ctx, alloc_cb, on_read);
 }
 
-static void maybe_commit(CC ctx, char* path, size_t words, size_t characters);
+static void maybe_commit(CC ctx, char* path, size_t lines, size_t words, size_t characters);
 
 static void check_path(CC ctx, char* path, u16 len) {
 	int pid = fork();
@@ -154,6 +153,7 @@ static void check_path(CC ctx, char* path, u16 len) {
 					found_diff = 0;
 				}
 			}
+		}
 	}
 DONE:
 	printf("words %lu %lu %lu\n",lines, words, characters);
@@ -193,7 +193,7 @@ void check_init(void) {
 }
 
 static void commit_later(uv_timer_t* handle) {
-	commit_now(ci.path, ci.words, ci.characters);
+	commit_now(ci.path, ci.lines, ci.words, ci.characters);
 	ci.path = NULL; // just in case
 }
 
@@ -204,12 +204,12 @@ static void maybe_commit(CC ctx, char* path, size_t lines, size_t words, size_t 
 	if(test < d) d = test;
 	test = (lines - 10)*(41*lines - 241)/3.0;
 	if(test < d) d = test;
-
+	
 	// don't bother waiting if it's more than an hour
 	if(d >= 3600) return;
 	if(d <= 1) {
 		uv_timer_stop(&ci.committer);
-		commit_now(path,words,characters);
+		commit_now(path,lines,words,characters);
 	} else {
 		time_t now = time(NULL);
 		if(ci.next_commit == 0 || now + d < ci.next_commit) {

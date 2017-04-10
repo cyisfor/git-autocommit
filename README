@@ -10,6 +10,7 @@ Server:
    - cancel waiter if it exists
    - words / characters decide how long to wait. 
       - 1 word = 5min, 10 words = 1 minute, 100 words = right now, etc
+      - see interpolate.py for exact figures
    - after waiting, git commit with "auto" message
  listen
  on read file save report:
