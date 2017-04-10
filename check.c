@@ -192,7 +192,7 @@ static void maybe_commit(CC ctx, char* path, size_t words, size_t characters) {
 	// m = (60 - 0) / (60 - 600) = - 60 / 540
 	// d = m * c + b, 0 = m * 60 + b, b = -m * 60 = 3600 / 540 = 60 / 9
 	// d = 60 * (1/9 - c / 540)
-	double delay1 = 60 * (1.0 / 9 - characters / 540);
+	double delay1 = 60 * (1.0 / 9 - characters / 540.0);
 	// 10 words = 1min to commit, 50 words = commit now
 	// m = (60 - 0) / (10 - 50) = -60 / 40 = -3/2
 	// b = -m * 60 = 3/2 * 60 = 3 * 30 = 90
@@ -207,10 +207,10 @@ static void maybe_commit(CC ctx, char* path, size_t words, size_t characters) {
 		uv_timer_stop(&ci.committer);
 		commit_now(path,words,characters);
 	} else {
-		printf("waiting %d\n",(int)d);
 		time_t now = time(NULL);
-		if(now + d > ci.next_commit) {
-			// keep pushing the timer ahead, so we change as much as possible before committing
+		if(now + d < ci.next_commit) {
+			// keep pushing the timer back, so we commit sooner if more changes
+			printf("waiting %d\n",(int)d);
 			uv_timer_stop(&ci.committer);
 			ci.next_commit = now + d;
 			ci.path = path;
