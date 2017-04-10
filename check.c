@@ -1,15 +1,16 @@
 struct check_context {
+	uv_tcp_t stream;
 	size_t checked; // parsed paths up to here
 	size_t read; // chars read so far
 	size_t space; // space in buffer
 	char* buf;
-	static time_t next_commit = 0;
-	static uv_timer_t committer;
+	time_t next_commit = 0;
+	uv_timer_t committer;
 };
 
 typedef struct check_context *CC;
 
-static void check_path(char* path, u16 len);
+static void check_path(CC ctx, char* path, u16 len);
 
 static void alloc_cb(uv_handle_t* handle, size_t size, uv_buf_t* ret) {
 	CC ctx = (CC) handle->data;
@@ -35,12 +36,10 @@ static void alloc_cb(uv_handle_t* handle, size_t size, uv_buf_t* ret) {
 }
 
 static void on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
-	CC ctx = (CC) stream->data;
+	CC ctx = (CC) &stream;
 	if(nread < 0 || nread == UV_EOF) {
-		if(ctx->committer) {
-			free(ctx->committer->data);
-			free(ctx->committer);
-		}
+		free(ctx->committer->data);
+		uv_timer_stop(ctx->committer);
 		free(ctx->buf);
 		free(ctx);
 		return;
@@ -58,17 +57,19 @@ static void on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
 		char* path = malloc(size+1); // +1 for the null
 		memcpy(path, ctx->buf + ctx->checked + 2, size);
 		path[size] = '\0';
-		check_path(path,size);
+		check_path(ctx, path,size);
 		ctx->checked += 2 + size;
 	}
 }
 
-void check_start_reading(uv_stream_t* stream) {
-	CC ctx = malloc(sizeof(struct check_context));
-	stream->data = ctx;
-	uv_read_start(stream, alloc_cb, on_read);
+void check_accept(uv_stream_t* server) {
+	CC ctx = (CC) malloc(sizeof(check_context));
+	uv_tcp_init(uv_default_loop(), &ctx->stream);
+	uv_accept(server, &ctx->stream);
+	uv_timer_init(uv_default_loop(),&ctx->committer);
+	ctx->committer->data = NULL;
+	uv_read_start((uv_stream_t*)ctx, alloc_cb, on_read);
 }
-
 
 struct commit_info {
 	const char* path;
@@ -76,9 +77,9 @@ struct commit_info {
 	size_t characters;
 };
 
-static void maybe_commit(const char* path, size_t words, size_t characters);
+static void maybe_commit(CC ctx, const char* path, size_t words, size_t characters);
 
-static void check_path(char* path, u16 len) {
+static void check_path(CC ctx, char* path, u16 len) {
 	char* args[] = {
 		"git","add",path, NULL
 	};
@@ -121,13 +122,9 @@ static void check_path(char* path, u16 len) {
 		}
 	}
 DONE:
-	maybe_commit(path, words, characters);
+	maybe_commit(ctx, path, words, characters);
 }
 
-void check_init(void) {
-	uv_timer_init(uv_default_loop(),&committer);
-	committer->data = NULL;
-}
 
 static void commit_now(const char* path, size_t words, size_t characters) {
 	int pid = fork();
@@ -143,11 +140,12 @@ static void commit_now(const char* path, size_t words, size_t characters) {
 static void commit_later(uv_timer_t* handle) {
 	struct commit_info* info = (struct commit_info*)handle->data;
 	commit_now(info->path, info->words, info->characters);
+	handle->data = NULL;
 	free(info);
 	waitfor(pid);
 }
 
-static void maybe_commit(const char* path, size_t words, size_t characters) {
+static void maybe_commit(CC ctx, const char* path, size_t words, size_t characters) {
 	// 60 characters = 1min to commit (60s), 600 characters means commit now.
 	// m = (60 - 0) / (60 - 600) = - 60 / 540
 	// d = m * c + b, 0 = m * 60 + b, b = -m * 60 = 3600 / 540 = 60 / 9
