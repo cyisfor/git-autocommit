@@ -1,11 +1,9 @@
-import numpy,math
+from sympy.polys.polyfuncs import interpolate
+from sympy import simplify, factor
+from sympy.abc import x
 
 def doit(*points):
-	x = numpy.array([p[0] for p in points])
-	y = numpy.array([p[1] for p in points])
-	res = numpy.polyfit(x, numpy.log(y),1,w=numpy.sqrt(y))
-	A = math.exp(res[0])
-	print(A,"* exp(",res[1],"* x)")
+	print(factor(interpolate(list(points),x)))
 
 """
 1 character = 3600s (don't commit)
@@ -17,8 +15,8 @@ def doit(*points):
 """
 
 doit((1,3600),
-		 (60,60),
-		 (600,1))
+
+		 (600,0))
 """
 1 word = 3600s
 10 words = 60s
@@ -26,7 +24,7 @@ doit((1,3600),
 """
 doit((1,3600),
 		 (10,60),
-		 (50,1))
+		 (50,0))
 
 """
 0 lines = 3600s
@@ -36,4 +34,4 @@ doit((1,3600),
 """
 doit((1,600),
 		 (5,60),
-		 (10,1))
+		 (10,0))
