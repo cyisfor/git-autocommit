@@ -1,0 +1,18 @@
+Everytime a file is saved, run client.
+
+Client:
+ if server not running, start it
+ tell server file that was saved
+
+Server:
+ to check:
+   - check accumulated changes by git diff ...
+   - cancel waiter if it exists
+   - words / characters decide how long to wait. 
+      - 1 word = 5min, 10 words = 1 minute, 100 words = right now, etc
+   - after waiting, git commit with "auto" message
+ listen
+ on read file save report:
+   check
+ check
+ main loop
