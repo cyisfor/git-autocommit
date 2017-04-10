@@ -6,6 +6,8 @@
 #include <unistd.h> // execvp
 #include <sys/mman.h> // mmap
 #include <stdint.h> // uint*
+#include <sys/wait.h> // waitpid
+
 
 typedef uint16_t u16;
 
@@ -32,8 +34,10 @@ typedef struct check_context *CC;
 
 static void check_path(CC ctx, char* path, u16 len);
 
+#define BLOCKSIZE 512
+
 static void alloc_cb(uv_handle_t* handle, size_t size, uv_buf_t* ret) {
-	CC ctx = (CC) handle->data;
+	CC ctx = (CC) handle;
 	size_t unchecked = ctx->read - ctx->checked;
 	if(unchecked < ctx->checked) {
 		// consolodate by removing old stuff (not overlapping)
@@ -48,7 +52,8 @@ static void alloc_cb(uv_handle_t* handle, size_t size, uv_buf_t* ret) {
 		}
 	}
 	if(ctx->read + size > ctx->space) {
-		ctx->space = ((ctx->read + size) / BLOCKSIZE + 1) * BLOCKSIZE;
+		ctx->space += BLOCKSIZE;
+		assert(ctx->space > 0);
 		ctx->buf = realloc(ctx->buf, ctx->space);
 	}
 	ret->base = ctx->buf + ctx->read;
@@ -56,7 +61,7 @@ static void alloc_cb(uv_handle_t* handle, size_t size, uv_buf_t* ret) {
 }
 
 static void on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
-	CC ctx = (CC) &stream;
+	CC ctx = (CC) stream;
 	if(nread < 0 || nread == UV_EOF) {
 		free(ctx->committer.data);
 		uv_timer_stop(&ctx->committer);
@@ -72,11 +77,13 @@ static void on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
 		if(ctx->read < ctx->checked + 2) break;
 		// no ntohs needed since it'd be silly not to run client/server on the same machine.
 		u16 size = *((u16*)(ctx->buf + ctx->checked));
+		printf("path size %d\n",size);
 		// the path hasn't finished coming in yet, break
 		if(ctx->read < ctx->checked + 2 + size) break;
 		char* path = malloc(size+1); // +1 for the null
 		memcpy(path, ctx->buf + ctx->checked + 2, size);
 		path[size] = '\0';
+		printf("yey %s\n",path);
 		check_path(ctx, path,size);
 		ctx->checked += 2 + size;
 	}
@@ -84,6 +91,8 @@ static void on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
 
 void check_accept(uv_stream_t* server) {
 	CC ctx = (CC) malloc(sizeof(struct check_context));
+	ctx->buf = NULL;
+	ctx->space = ctx->read = ctx->checked = 0;
 	ctx->next_commit = 0;
 	uv_tcp_init(uv_default_loop(), &ctx->stream);
 	uv_accept(server, (uv_stream_t*) &ctx->stream);
