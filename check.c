@@ -78,13 +78,11 @@ static void on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
 		if(ctx->read < ctx->checked + 2) break;
 		// no ntohs needed since it'd be silly not to run client/server on the same machine.
 		u16 size = *((u16*)(ctx->buf + ctx->checked));
-		printf("path size %d\n",size);
 		// the path hasn't finished coming in yet, break
 		if(ctx->read < ctx->checked + 2 + size) break;
 		char* path = malloc(size+1); // +1 for the null
 		memcpy(path, ctx->buf + ctx->checked + 2, size);
 		path[size] = '\0';
-		printf("yey %s\n",path);
 		check_path(ctx, path,size);
 		ctx->checked += 2 + size;
 	}
