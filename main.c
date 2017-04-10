@@ -1,7 +1,9 @@
 #include "check.h"
+#include <assert.h>
+
 
 void on_connect(uv_stream_t* server, int status) {
-	assert_zero(status);
+	assert(0==status);
 	check_accept(server);
 }
 

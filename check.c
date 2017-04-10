@@ -1,10 +1,23 @@
+#include "check.h"
+#include <assert.h>
+#include <stdlib.h> // malloc
+#include <string.h> // memcpy
+
+static void waitfor(int pid) {
+	int status;
+	assert(pid == waitpid(pid,&status,0));
+	assert(WIFEXITED(status));
+	assert(WEXITSTATUS(status) == 0);
+}
+
+
 struct check_context {
 	uv_tcp_t stream;
 	size_t checked; // parsed paths up to here
 	size_t read; // chars read so far
 	size_t space; // space in buffer
 	char* buf;
-	time_t next_commit = 0;
+	time_t next_commit;
 	uv_timer_t committer;
 };
 
@@ -64,8 +77,9 @@ static void on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
 
 void check_accept(uv_stream_t* server) {
 	CC ctx = (CC) malloc(sizeof(check_context));
+	ctx->next_commit = 0;
 	uv_tcp_init(uv_default_loop(), &ctx->stream);
-	uv_accept(server, &ctx->stream);
+	uv_accept(server, (uv_handle_t*) &ctx->stream);
 	uv_timer_init(uv_default_loop(),&ctx->committer);
 	ctx->committer->data = NULL;
 	uv_read_start((uv_stream_t*)ctx, alloc_cb, on_read);
@@ -142,7 +156,6 @@ static void commit_later(uv_timer_t* handle) {
 	commit_now(info->path, info->words, info->characters);
 	handle->data = NULL;
 	free(info);
-	waitfor(pid);
 }
 
 static void maybe_commit(CC ctx, const char* path, size_t words, size_t characters) {
@@ -163,22 +176,22 @@ static void maybe_commit(CC ctx, const char* path, size_t words, size_t characte
 	if(d > 3600) return;
 
 	if(d <= 1) {
-		uv_timer_stop(&committer);
+		uv_timer_stop(&ctx->committer);
 		commit_now(path,words,characters);
 	} else {
 		time_t now = time(NULL);
 		if(now + d > ctx->next_commit) {
 			// keep pushing the timer ahead, so we change as much as possible before committing
-			uv_timer_stop(&committer);
+			uv_timer_stop(&ctx->committer);
 			ctx->next_commit = now + d;
 			struct commit_info* info = malloc(sizeof(struct commit_info));
 			info->path = path;
 			info->words = words;
 			info->characters = characters;
-			if(ctx->committer->data) {
-				free(ctx->committer->data);
+			if(ctx->committer.data) {
+				free(ctx->committer.data);
 			}
-			ctx->committer->data = info;
+			ctx->committer.data = info;
 			uv_timer_start(&ctx->committer, commit_later, d * 1000, 0);
 		}
 	}
