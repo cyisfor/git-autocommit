@@ -58,5 +58,5 @@ void check_path(char* path, u16 len) {
 				(diff[i+1] == '+' && diff[i+2] != '+'))) {
 			// we're at the newline before a -word or +word
 		}
-	
+	}
 }
