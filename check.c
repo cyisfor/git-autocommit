@@ -198,19 +198,15 @@ static void commit_later(uv_timer_t* handle) {
 }
 
 static void maybe_commit(CC ctx, char* path, size_t lines, size_t words, size_t characters) {
-	double delay1 = 60 * (1.0 / 9 - characters / 540.0);
-	// 10 words = 1min to commit, 50 words = commit now
-	// m = (60 - 0) / (10 - 50) = -60 / 40 = -3/2
-	// b = -m * 60 = 3/2 * 60 = 3 * 30 = 90
-	// d = 90 - 3 * w / 2
-	double delay2 = 90 - 3 * words / 2.0;
-	double d = delay1;
-	if(delay1 > delay2) d = delay2;
-	// 5 lines = 60s, 10 lines = now
-	// m = (60 - 0) / (5 - 10) = -60 / -5 = -12
+	// see interpolate.py
+	double d = (characters - 600) * (539 * characters - 32939)/5391.0;
+	double test = (words - 50)*(2351*words - 23951)/294.0;
+	if(test < d) d = test;
+	test = (lines - 10)*(41*lines - 241)/3.0;
+	if(test < d) d = test;
 
 	// don't bother waiting if it's more than an hour
-	if(d > 3600) return;
+	if(d >= 3600) return;
 	if(d <= 1) {
 		uv_timer_stop(&ci.committer);
 		commit_now(path,words,characters);
