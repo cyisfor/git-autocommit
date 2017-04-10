@@ -2,8 +2,15 @@
 #include <assert.h>
 #include <stdlib.h> // malloc
 #include <string.h> // memcpy
+#include <stdio.h> // snprintf
+#include <unistd.h> // execvp
+#include <sys/mman.h> // mmap
+#include <stdint.h> // uint*
+
+typedef uint16_t u16;
 
 static void waitfor(int pid) {
+	assert(pid > 0);
 	int status;
 	assert(pid == waitpid(pid,&status,0));
 	assert(WIFEXITED(status));
@@ -44,20 +51,20 @@ static void alloc_cb(uv_handle_t* handle, size_t size, uv_buf_t* ret) {
 		ctx->space = ((ctx->read + size) / BLOCKSIZE + 1) * BLOCKSIZE;
 		ctx->buf = realloc(ctx->buf, ctx->space);
 	}
-	ret->base = ctx->buf + ctx->read,
-	ret->len = ctx->space - ctx->read
+	ret->base = ctx->buf + ctx->read;
+	ret->len = ctx->space - ctx->read;
 }
 
 static void on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
 	CC ctx = (CC) &stream;
 	if(nread < 0 || nread == UV_EOF) {
-		free(ctx->committer->data);
-		uv_timer_stop(ctx->committer);
+		free(ctx->committer.data);
+		uv_timer_stop(&ctx->committer);
 		free(ctx->buf);
 		free(ctx);
 		return;
 	}
-	ctx->read += n;
+	ctx->read += nread;
 
 	// now read all the paths we see.
 	for(;;) {
@@ -76,12 +83,12 @@ static void on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
 }
 
 void check_accept(uv_stream_t* server) {
-	CC ctx = (CC) malloc(sizeof(check_context));
+	CC ctx = (CC) malloc(sizeof(struct check_context));
 	ctx->next_commit = 0;
 	uv_tcp_init(uv_default_loop(), &ctx->stream);
-	uv_accept(server, (uv_handle_t*) &ctx->stream);
+	uv_accept(server, (uv_stream_t*) &ctx->stream);
 	uv_timer_init(uv_default_loop(),&ctx->committer);
-	ctx->committer->data = NULL;
+	ctx->committer.data = NULL;
 	uv_read_start((uv_stream_t*)ctx, alloc_cb, on_read);
 }
 
@@ -94,14 +101,19 @@ struct commit_info {
 static void maybe_commit(CC ctx, const char* path, size_t words, size_t characters);
 
 static void check_path(CC ctx, char* path, u16 len) {
-	char* args[] = {
-		"git","add",path, NULL
-	};
-	call(args);
+	int pid = fork();
+	if(pid == 0) {
+		char* args[] = {
+			"git","add",path, NULL
+		};
+		execvp("git",args);
+	}
+	waitfor(pid);
+
 	char* template = "derpXXXXXX";
 	int io = mkstemp(template);
 	unlink(template);
-	int pid = fork();
+	pid = fork();
 	if(pid == 0) {
 		dup2(io,1);
 		close(io);
@@ -144,7 +156,7 @@ static void commit_now(const char* path, size_t words, size_t characters) {
 	int pid = fork();
 	if(pid == 0) {
 		char message[0x1000];
-		snprintf(message,"auto (%s) %lu %lu",
+		snprintf(message,0x1000,"auto (%s) %lu %lu",
 						 path, words, characters);
 		execlp("git","commit","-a","-m",message,NULL);
 	}
