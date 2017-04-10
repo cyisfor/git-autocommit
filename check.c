@@ -124,7 +124,8 @@ static void check_path(CC ctx, char* path, u16 len) {
 	waitfor(pid);
 	struct stat st;
 	assert(0==fstat(io,&st));
-	if(st.st_size == 0) return;
+	if(st.st_size == 0)
+		return;
 	char* diff = mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, io, 0);
 	assert(diff != MAP_FAILED);
 
@@ -208,7 +209,7 @@ static void maybe_commit(CC ctx, char* path, size_t words, size_t characters) {
 		commit_now(path,words,characters);
 	} else {
 		time_t now = time(NULL);
-		if(now + d < ci.next_commit) {
+		if(ci.next_commit == 0 || now + d < ci.next_commit) {
 			// keep pushing the timer back, so we commit sooner if more changes
 			printf("waiting %d\n",(int)d);
 			uv_timer_stop(&ci.committer);
