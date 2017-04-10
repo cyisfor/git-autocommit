@@ -124,6 +124,7 @@ static void check_path(CC ctx, char* path, u16 len) {
 	waitfor(pid);
 	struct stat st;
 	assert(0==fstat(io,&st));
+	if(st.st_size == 0) return;
 	char* diff = mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, io, 0);
 	assert(diff != MAP_FAILED);
 
