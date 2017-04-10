@@ -9,8 +9,8 @@
 #include <sys/wait.h> // waitpid
 #include <ctype.h> // isspace
 
-
 typedef uint16_t u16;
+typedef int32_t i32;
 
 static void waitfor(int pid) {
 	assert(pid > 0);
@@ -98,7 +98,7 @@ void check_accept(uv_stream_t* server) {
 	uv_read_start((uv_stream_t*)ctx, alloc_cb, on_read);
 }
 
-static void maybe_commit(CC ctx, char* path, size_t lines, size_t words, size_t characters);
+static void maybe_commit(CC ctx, char* path, i32 lines, i32 words, i32 characters);
 
 static void check_path(CC ctx, char* path, u16 len) {
 	int pid = fork();
@@ -128,15 +128,15 @@ static void check_path(CC ctx, char* path, u16 len) {
 	char* diff = mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, io, 0);
 	assert(diff != MAP_FAILED);
 
-	size_t characters = 0;
-	size_t words = 0;
-	size_t lines = 0;
+	i32 characters = 0;
+	i32 words = 0;
+	i32 lines = 0;
 	size_t i = 0;
 	char found_diff = 0;
 	for(;i<st.st_size;++i) {
 		if(i < st.st_size - 2 &&
 			 (i == 0 || diff[i] == '\n')) {
-			if (i < st.st_size - 3 && 
+			if (i < st.st_size - 3 &&
 					((diff[i+1] == '-' && diff[i+2] != '-') ||
 					 (diff[i+1] == '+' && diff[i+2] != '+'))) {
 				found_diff = 1;
@@ -145,15 +145,17 @@ static void check_path(CC ctx, char* path, u16 len) {
 				char inword = 1;
 				size_t lastw = j;
 				for(;j<st.st_size;++j) {
-					printf("C: %c %d %d %d\n",diff[j],inword,lastw,j);
+					//printf("C: %c %d %d %d\n",diff[j],inword,lastw,j);
 					if(isspace(diff[j])) {
 						if(inword) {
 							inword = 0;
 							if(lastw + 1 < j)  {
 								void commit(void) {
-									printf("word: %d %d ",lastw,j);
+									/*
+										printf("word: %d %d ",lastw,j);
 									fwrite(diff+lastw,j-lastw,1,stdout);
 									fputc('\n',stdout);
+									*/
 									++words;
 								}
 								if(lastw + 2 == j) {
@@ -168,20 +170,23 @@ static void check_path(CC ctx, char* path, u16 len) {
 									case 'y':
 									case 'Y':
 										break;
-									default:		
+									default:
 										commit();
 									};
 								} else {
 									commit();
 								}
+								lastw = j;
 							}
+						} else {
 							lastw = j;
 						}
-						if(diff[j] == '\n') 
+						if(diff[j] == '\n')
 							break;
 					} else {
 						if(!inword) {
 							inword = 1;
+							lastw = j;
 						}
 					}
 					++characters;
@@ -198,12 +203,11 @@ static void check_path(CC ctx, char* path, u16 len) {
 	}
 DONE:
 	printf("words %lu %lu %lu\n",lines, words, characters);
-	exit(23);
 	maybe_commit(ctx, path, lines, words, characters);
 }
 
 
-static void commit_now(char* path, size_t lines, size_t words, size_t characters) {
+static void commit_now(char* path, i32 lines, i32 words, i32 characters) {
 	puts("committing");
 	int pid = fork();
 	if(pid == 0) {
@@ -222,9 +226,9 @@ struct commit_info {
 	uv_timer_t committer;
 	time_t next_commit;
 	char* path;
-	size_t lines;
-	size_t words;
-	size_t characters;
+	i32 lines;
+	i32 words;
+	i32 characters;
 } ci;
 
 void check_init(void) {
@@ -239,14 +243,14 @@ static void commit_later(uv_timer_t* handle) {
 	ci.path = NULL; // just in case
 }
 
-static void maybe_commit(CC ctx, char* path, size_t lines, size_t words, size_t characters) {
+static void maybe_commit(CC ctx, char* path, i32 lines, i32 words, i32 characters) {
 	// see interpolate.py
 	double d = (characters - 600) * (539 * characters - 32939)/5391.0;
 	double test = (words - 50)*(2351*words - 23951)/294.0;
 	if(test < d) d = test;
 	test = (lines - 10)*(41*lines - 241)/3.0;
 	if(test < d) d = test;
-	
+
 	// don't bother waiting if it's more than an hour
 	if(d >= 3600) return;
 	if(d <= 1) {
