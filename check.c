@@ -19,15 +19,12 @@ static void waitfor(int pid) {
 	assert(WEXITSTATUS(status) == 0);
 }
 
-
 struct check_context {
 	uv_tcp_t stream;
 	size_t checked; // parsed paths up to here
 	size_t read; // chars read so far
 	size_t space; // space in buffer
 	char* buf;
-	time_t next_commit;
-	uv_timer_t committer;
 };
 
 typedef struct check_context *CC;
@@ -60,16 +57,17 @@ static void alloc_cb(uv_handle_t* handle, size_t size, uv_buf_t* ret) {
 	ret->len = ctx->space - ctx->read;
 }
 
-void cleanup(uv_handle_t* h) {
+static void cleanup(uv_handle_t* h) {
 	CC ctx = (CC) h;
 	free(ctx->buf);
 	free(ctx);
+	puts("cleaned up");
 }
 
 static void on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
 	CC ctx = (CC) stream;
 	if(nread < 0 || nread == UV_EOF) {
-		puts("cleanup 1");
+		puts("cleanup");
 		uv_timer_stop(&ctx->committer);
 		free(ctx->committer.data);
 		uv_close((uv_handle_t*)stream, cleanup);
@@ -99,7 +97,7 @@ void check_accept(uv_stream_t* server) {
 	CC ctx = (CC) malloc(sizeof(struct check_context));
 	ctx->buf = NULL;
 	ctx->space = ctx->read = ctx->checked = 0;
-	ctx->next_commit = 0;
+	ctx->ci = NULL;
 	uv_tcp_init(uv_default_loop(), &ctx->stream);
 	uv_accept(server, (uv_stream_t*) &ctx->stream);
 	uv_timer_init(uv_default_loop(),&ctx->committer);
@@ -107,17 +105,12 @@ void check_accept(uv_stream_t* server) {
 	uv_read_start((uv_stream_t*)ctx, alloc_cb, on_read);
 }
 
-struct commit_info {
-	const char* path;
-	size_t words;
-	size_t characters;
-};
-
 static void maybe_commit(CC ctx, const char* path, size_t words, size_t characters);
 
 static void check_path(CC ctx, char* path, u16 len) {
 	int pid = fork();
 	if(pid == 0) {
+		printf("adding %s\n",path);
 		char* args[] = {
 			"git","add",path, NULL
 		};
@@ -159,11 +152,13 @@ static void check_path(CC ctx, char* path, u16 len) {
 		}
 	}
 DONE:
+	printf("words %lu %lu\n",words, characters);
 	maybe_commit(ctx, path, words, characters);
 }
 
 
 static void commit_now(const char* path, size_t words, size_t characters) {
+	puts("committing");
 	int pid = fork();
 	if(pid == 0) {
 		char message[0x1000];
@@ -172,13 +167,29 @@ static void commit_now(const char* path, size_t words, size_t characters) {
 		execlp("git","git","commit","-a","-m",message,NULL);
 	}
 	waitfor(pid);
+	free(path); // won't need this after the commit is done...
+}
+
+// this should be global, so that it doesn't commit several times one for each connection,
+// and so that it doesn't abort committing if a connection dies
+struct commit_info {
+	uv_timer_t committer;
+	time_t next_commit;
+	const char* path;
+	size_t words;
+	size_t characters;
+} ci;
+
+void check_init(void) {
+	uv_timer_init(uv_default_loop(), &ci->committer);
+	ci->next_commit = 0;
+	ci->path = NULL;
+	ci->words = ci->characters = 0;
 }
 
 static void commit_later(uv_timer_t* handle) {
-	struct commit_info* info = (struct commit_info*)handle->data;
-	commit_now(info->path, info->words, info->characters);
-	handle->data = NULL;
-	free(info);
+	commit_now(ci.path, ci.words, ci.characters);
+	ci.path = NULL; // just in case
 }
 
 static void maybe_commit(CC ctx, const char* path, size_t words, size_t characters) {
@@ -199,23 +210,18 @@ static void maybe_commit(CC ctx, const char* path, size_t words, size_t characte
 	if(d > 3600) return;
 
 	if(d <= 1) {
-		uv_timer_stop(&ctx->committer);
+		uv_timer_stop(&ci.committer);
 		commit_now(path,words,characters);
 	} else {
 		time_t now = time(NULL);
-		if(now + d > ctx->next_commit) {
+		if(now + d > ci.next_commit) {
 			// keep pushing the timer ahead, so we change as much as possible before committing
-			uv_timer_stop(&ctx->committer);
-			ctx->next_commit = now + d;
-			struct commit_info* info = malloc(sizeof(struct commit_info));
-			info->path = path;
-			info->words = words;
-			info->characters = characters;
-			if(ctx->committer.data) {
-				free(ctx->committer.data);
-			}
-			ctx->committer.data = info;
-			uv_timer_start(&ctx->committer, commit_later, d * 1000, 0);
+			uv_timer_stop(&ci.committer);
+			ci.next_commit = now + d;
+			ci.path = path;
+			ci.words = words;
+			ci.characters = characters;
+			uv_timer_start((uv_timer_t*)&ci, commit_later, d * 1000, 0);
 		}
 	}
 }
