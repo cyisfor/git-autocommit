@@ -10,6 +10,7 @@ void on_connect(uv_stream_t* server, int status) {
 
 int main(int argc, char *argv[])
 {
+	check_init();
 	uv_pipe_t server;
 	uv_pipe_init(uv_default_loop(), &server, 1);
 	char name[0x200] = "\0"; // "abstract" sockets are way less messy

@@ -67,9 +67,6 @@ static void cleanup(uv_handle_t* h) {
 static void on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
 	CC ctx = (CC) stream;
 	if(nread < 0 || nread == UV_EOF) {
-		puts("cleanup");
-		uv_timer_stop(&ctx->committer);
-		free(ctx->committer.data);
 		uv_close((uv_handle_t*)stream, cleanup);
 		return;
 	}
@@ -97,15 +94,12 @@ void check_accept(uv_stream_t* server) {
 	CC ctx = (CC) malloc(sizeof(struct check_context));
 	ctx->buf = NULL;
 	ctx->space = ctx->read = ctx->checked = 0;
-	ctx->ci = NULL;
 	uv_tcp_init(uv_default_loop(), &ctx->stream);
 	uv_accept(server, (uv_stream_t*) &ctx->stream);
-	uv_timer_init(uv_default_loop(),&ctx->committer);
-	ctx->committer.data = NULL;
 	uv_read_start((uv_stream_t*)ctx, alloc_cb, on_read);
 }
 
-static void maybe_commit(CC ctx, const char* path, size_t words, size_t characters);
+static void maybe_commit(CC ctx, char* path, size_t words, size_t characters);
 
 static void check_path(CC ctx, char* path, u16 len) {
 	int pid = fork();
@@ -157,7 +151,7 @@ DONE:
 }
 
 
-static void commit_now(const char* path, size_t words, size_t characters) {
+static void commit_now(char* path, size_t words, size_t characters) {
 	puts("committing");
 	int pid = fork();
 	if(pid == 0) {
@@ -175,16 +169,16 @@ static void commit_now(const char* path, size_t words, size_t characters) {
 struct commit_info {
 	uv_timer_t committer;
 	time_t next_commit;
-	const char* path;
+	char* path;
 	size_t words;
 	size_t characters;
 } ci;
 
 void check_init(void) {
-	uv_timer_init(uv_default_loop(), &ci->committer);
-	ci->next_commit = 0;
-	ci->path = NULL;
-	ci->words = ci->characters = 0;
+	uv_timer_init(uv_default_loop(), &ci.committer);
+	ci.next_commit = 0;
+	ci.path = NULL;
+	ci.words = ci.characters = 0;
 }
 
 static void commit_later(uv_timer_t* handle) {
@@ -192,7 +186,7 @@ static void commit_later(uv_timer_t* handle) {
 	ci.path = NULL; // just in case
 }
 
-static void maybe_commit(CC ctx, const char* path, size_t words, size_t characters) {
+static void maybe_commit(CC ctx, char* path, size_t words, size_t characters) {
 	// 60 characters = 1min to commit (60s), 600 characters means commit now.
 	// m = (60 - 0) / (60 - 600) = - 60 / 540
 	// d = m * c + b, 0 = m * 60 + b, b = -m * 60 = 3600 / 540 = 60 / 9
