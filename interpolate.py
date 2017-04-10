@@ -3,19 +3,18 @@ from sympy import simplify, factor
 from sympy.abc import x
 
 def doit(*points):
-	print(factor(interpolate(list(points),x)))
+	print(factor(interpolate(points,x)))
 
 """
 1 character = 3600s (don't commit)
 		 60 characters = 60s to commit
 		 600 characters means commit now.
 		 (1,9000)
-		 (60,60)
+
 		 (600,0)
 """
 
 doit((1,3600),
-
 		 (600,0))
 """
 1 word = 3600s

@@ -244,8 +244,56 @@ static void commit_later(uv_timer_t* handle) {
 }
 
 static void maybe_commit(CC ctx, char* path, i32 lines, i32 words, i32 characters) {
-	// see interpolate.py
-	double d = (characters - 600) * (539 * characters - 32939)/5391.0;
+	/* if between 1 and 60s, go between 3600 and 60, if between 60 and 600, go between 60 and 0 */
+	double chars(void) {
+		if(characters >= 1) {
+			if(characters < 60) {
+				return 3600 - (characters - 1) / (60-1) * 3600;
+			} else if(characters < 600) {
+				return 60 - (characters - 60) / (600-60) * 60;
+			} else {
+				return 0;
+			}
+		}
+		return 9001;
+	}
+	double words(void) {
+		/* if between 1 and 10, 3600 to 60, if between 10 and 50, 60 to 0 */
+		if(words >= 1) {
+			if(words < 10) {
+				return 3600 - (words - 1) / (10-1) * 3600;
+			} else if(words < 50) {
+				return 60 - (words - 10) / (50-10) * 60;
+			} else {
+				return 0;
+			}
+		}
+		return 9001;
+	}
+	double lines(void) {
+		/* if between 1 and 5, 3600 to 60, if between 5 and 10, 60 to 0 */
+		if(lines >= 1) {
+			if(lines < 5) {
+				return 3600 - (lines - 1) / (5-1) * 3600;
+			} else if(lines < 10) {
+				return 60 - (lines - 5) / (10-5) * 60;
+			} else {
+				return 0;
+			}
+		}
+		return 9001;
+	}
+
+	double d = chars();
+	double test = words();
+	if(d > test) d = test;
+	test = lines();
+	if(d > test) d = test;
+	return d;
+}
+		
+			
+				
 	double test = (words - 50)*(2351*words - 23951)/294.0;
 	if(test < d) d = test;
 	test = (lines - 10)*(41*lines - 241)/3.0;
