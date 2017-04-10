@@ -139,12 +139,19 @@ static void check_path(CC ctx, char* path, u16 len) {
 					 (diff[i+1] == '+' && diff[i+2] != '+'))) {
 				found_diff = 1;
 				// we're at the newline before a -word or +word
-				++words;
 				size_t j = i+3;
+				size_t lastw = j;
 				for(;j<st.st_size;++j) {
-					if(diff[j] == '\n') break;
+					if(diff[j] == '\n') {
+						break;
+					}
+					if(lastw > j - 1 && diff[j] == ' ') {
+						++words;
+						lastw = j;
+					}
 					++characters;
 				}
+				if(lastw > j - 1) ++words;
 				i = j;
 			} else if(diff[i+1] == '~') {
 				// newlines in the source are represented by a \n~
