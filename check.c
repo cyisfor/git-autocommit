@@ -198,52 +198,6 @@ static void commit_later(uv_timer_t* handle) {
 }
 
 static void maybe_commit(CC ctx, char* path, size_t lines, size_t words, size_t characters) {
-	/* lagrange interpolation
-		 given (x1,y1), (x2,y2), (x3,y3)
-		 L(x) = y1 * (X - x2) / (x1 - x2) * (X - x3) / (x1 - x3)
-		        +
-						y2 * (X - x1) / (x2 - x1) * (X - x3) / (x2 - x3)
-					  +
-						y3 * (X - x2) / (x3 - x2) * (X - x1) / (x3 - x1)
-					...group by X as much as possible
-				  y1 * (X - x2) / (x1 - x2) = y1 * X / (x1 - x2) - y1 * x2 / (x1 - x2)
-					y1 * (X - x3) / (x1 - x3) = y1 * X / (x1 - x3) - y1 * x3 / (x1 - x3)
-			    * =====
-					(y1 * X / (x1 - x2)) * (y1 * X / (x1 - x3)) +
-					
-					(y1 * X / (x1 - x2)) * (- y1 * x3 / (x1 - x3)) +
-					(- y1 * x2 / (x1 - x2)) * (y1 * X / (x1 - x3)) +
-					
-					(- y1 * x2 / (x1 - x2)) * (- y1 * x3 / (x1 - x3))
-					=
-					(y1 / (x1 - x2) * y1 / (x1 - x3)) * X^2
-					+ (
-					   y1 / (x1 - x2) * -y1 * x3 / (x1 - x3) +
-						 -y1 * x2 / (x1 - x2) * y1 / (x1 - x3)) * X
-				  +
-					-y1 * x2 / (x1 - x2) * -y1 * x3 / (x1 - x3)
-
-					A = (y1 / (x1 - x2) * y1 / (x1 - x3))
-					B = (y1 * y1 / (x1 - x2) / (x1 - x3) * (x3 + x2)
-					C = y1 * x2 / (x1 - x2) * y1 * x3 / (x1 - x3)
-	*/
-	/* 1 character = 9000s (don't commit)
-		 60 characters = 60s to commit
-		 600 characters means commit now.
-		 (1,9000)
-		 (60,60)
-		 (600,0)
-	*/
-#define A (y1 / (x1 - x2) * y1 / (x1 - x3))
-#define B (y1 * y1 / (x1 - x2) / (x1 - x3) * (x3 + x2))
-#define C (y1 * x2 / (x1 - x2) * y1 * x3 / (x1 - x3))
-
-#define x1 1
-	
-	#define
-	// m = (60 - 0) / (60 - 600) = - 60 / 540
-	// d = m * c + b, 0 = m * 60 + b, b = -m * 60 = 3600 / 540 = 60 / 9
-	// d = 60 * (1/9 - c / 540)
 	double delay1 = 60 * (1.0 / 9 - characters / 540.0);
 	// 10 words = 1min to commit, 50 words = commit now
 	// m = (60 - 0) / (10 - 50) = -60 / 40 = -3/2
