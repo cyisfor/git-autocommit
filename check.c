@@ -7,6 +7,8 @@
 #include <sys/mman.h> // mmap
 #include <stdint.h> // uint*
 #include <sys/wait.h> // waitpid
+#include <ctype.h> // isspace
+
 
 typedef uint16_t u16;
 
@@ -139,19 +141,51 @@ static void check_path(CC ctx, char* path, u16 len) {
 					 (diff[i+1] == '+' && diff[i+2] != '+'))) {
 				found_diff = 1;
 				// we're at the newline before a -word or +word
-				size_t j = i+3;
+				size_t j = i+2;
+				char inword = 1;
 				size_t lastw = j;
 				for(;j<st.st_size;++j) {
-					if(diff[j] == '\n') {
-						break;
-					}
-					if(lastw > j - 1 && diff[j] == ' ') {
-						++words;
-						lastw = j;
+					printf("C: %c %d %d %d\n",diff[j],inword,lastw,j);
+					if(isspace(diff[j])) {
+						if(inword) {
+							inword = 0;
+							if(lastw + 1 < j)  {
+								void commit(void) {
+									printf("word: %d %d ",lastw,j);
+									fwrite(diff+lastw,j-lastw,1,stdout);
+									fputc('\n',stdout);
+									++words;
+								}
+								if(lastw + 2 == j) {
+									// 1 letter
+									switch(diff[lastw]) {
+									case 'a':
+									case 'A':
+									case 'i':
+									case 'I':
+									case 'u':
+									case 'U':
+									case 'y':
+									case 'Y':
+										break;
+									default:		
+										commit();
+									};
+								} else {
+									commit();
+								}
+							}
+							lastw = j;
+						}
+						if(diff[j] == '\n') 
+							break;
+					} else {
+						if(!inword) {
+							inword = 1;
+						}
 					}
 					++characters;
 				}
-				if(lastw > j - 1) ++words;
 				i = j;
 			} else if(diff[i+1] == '~') {
 				// newlines in the source are represented by a \n~
@@ -164,6 +198,7 @@ static void check_path(CC ctx, char* path, u16 len) {
 	}
 DONE:
 	printf("words %lu %lu %lu\n",lines, words, characters);
+	exit(23);
 	maybe_commit(ctx, path, lines, words, characters);
 }
 
