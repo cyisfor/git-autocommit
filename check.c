@@ -60,14 +60,19 @@ static void alloc_cb(uv_handle_t* handle, size_t size, uv_buf_t* ret) {
 	ret->len = ctx->space - ctx->read;
 }
 
+void cleanup(uv_handle_t* h) {
+	CC ctx = (CC) h;
+	free(ctx->buf);
+	free(ctx);
+}
+
 static void on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
 	CC ctx = (CC) stream;
 	if(nread < 0 || nread == UV_EOF) {
-		puts("cleanup");
-		free(ctx->committer.data);
+		puts("cleanup 1");
 		uv_timer_stop(&ctx->committer);
-		free(ctx->buf);
-		free(ctx);
+		free(ctx->committer.data);
+		uv_close((uv_handle_t*)stream, cleanup);
 		return;
 	}
 	ctx->read += nread;

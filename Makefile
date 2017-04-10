@@ -1,5 +1,5 @@
 LDFLAGS+=-luv
 CFLAGS+=-g
-all: main client
+all: server client
 server: check.c server.c
 client: client.c
