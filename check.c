@@ -3,14 +3,49 @@ struct check_context {
 	size_t read; // chars read so far
 	size_t space; // space in buffer
 	char* buf;
+	static time_t next_commit = 0;
+	static uv_timer_t committer;
 };
 
-void check_consume(CC ctx, const char* buf, size_t n) {
-	if(ctx->read + n > ctx->space) {
-		ctx->space = ((ctx->read + n) / BLOCKSIZE + 1) * BLOCKSIZE;
+typedef struct check_context *CC;
+
+static void check_path(char* path, u16 len);
+
+static void alloc_cb(uv_handle_t* handle, size_t size, uv_buf_t* ret) {
+	CC ctx = (CC) handle->data;
+	size_t unchecked = ctx->read - ctx->checked;
+	if(unchecked < ctx->checked) {
+		// consolodate by removing old stuff (not overlapping)
+		size_t canremove = (ctx->read / BLOCKSIZE) * BLOCKSIZE;
+		if(canremove > 0) {
+			memcpy(ctx->buf, ctx->buf + canremove, unchecked);
+			ctx->checked = 0;
+			ctx->read = unchecked;
+			ctx->space -= canremove;
+			// should be able to reuse instead of shrinking
+			//ctx->buf = realloc(ctx->buf, ctx->space);
+		}
+	}
+	if(ctx->read + size > ctx->space) {
+		ctx->space = ((ctx->read + size) / BLOCKSIZE + 1) * BLOCKSIZE;
 		ctx->buf = realloc(ctx->buf, ctx->space);
 	}
-	memcpy(ctx->buf + ctx->read, buf, n);
+	ret->base = ctx->buf + ctx->read,
+	ret->len = ctx->space - ctx->read
+}
+
+static void on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
+	CC ctx = (CC) stream->data;
+	if(nread < 0 || nread == UV_EOF) {
+		if(ctx->committer) {
+			free(ctx->committer->data);
+			free(ctx->committer);
+		}
+		free(ctx->buf);
+		free(ctx);
+		return;
+	}
+	ctx->read += n;
 
 	// now read all the paths we see.
 	for(;;) {
@@ -28,7 +63,22 @@ void check_consume(CC ctx, const char* buf, size_t n) {
 	}
 }
 
-void check_path(char* path, u16 len) {
+void check_start_reading(uv_stream_t* stream) {
+	CC ctx = malloc(sizeof(struct check_context));
+	stream->data = ctx;
+	uv_read_start(stream, alloc_cb, on_read);
+}
+
+
+struct commit_info {
+	const char* path;
+	size_t words;
+	size_t characters;
+};
+
+static void maybe_commit(const char* path, size_t words, size_t characters);
+
+static void check_path(char* path, u16 len) {
 	char* args[] = {
 		"git","add",path, NULL
 	};
@@ -44,16 +94,16 @@ void check_path(char* path, u16 len) {
 					 "--word-diff=porcelain",NULL);
 	}
 	waitfor(pid);
-	struct stat info;
-	assert(fstat(io,&info));
-	char* diff = mmap(NULL, info.st_size, PROT_READ, MAP_PRIVATE, io, 0);
+	struct stat st;
+	assert(fstat(io,&st));
+	char* diff = mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, io, 0);
 	assert(diff != MAP_FAILED);
 
 	size_t characters = 0;
 	size_t words = 0;
 	size_t i = 0;
-	for(;i<info.st_size;++i) {
-		if(i < info.st_size - 3 &&
+	for(;i<st.st_size;++i) {
+		if(i < st.st_size - 3 &&
 			 (i == 0 || diff[i] == '\n') && 
 			 ((diff[i+1] == '-' && diff[i+2] != '-') ||
 				(diff[i+1] == '+' && diff[i+2] != '+'))) {
@@ -61,7 +111,7 @@ void check_path(char* path, u16 len) {
 			++words;
 			size_t j = i+3;
 			for(;;) {
-				if(j >= info.st_size) {
+				if(j >= st.st_size) {
 					goto DONE;
 				}
 				if(diff[j] == '\n') break;
@@ -71,25 +121,33 @@ void check_path(char* path, u16 len) {
 		}
 	}
 DONE:
-	maybe_commit(words, characters);
+	maybe_commit(path, words, characters);
 }
-
-time_t next_commit = 0;
-uv_timer_t committer;
 
 void check_init(void) {
 	uv_timer_init(uv_default_loop(),&committer);
+	committer->data = NULL;
 }
 
-void commit_now(uv_timer_t* handle) {
+static void commit_now(const char* path, size_t words, size_t characters) {
 	int pid = fork();
 	if(pid == 0) {
 		char message[0x1000];
-		snprintf(message,
+		snprintf(message,"auto (%s) %lu %lu",
+						 path, words, characters);
 		execlp("git","commit","-a","-m",message,NULL);
+	}
+	waitfor(pid);
+}
 
+static void commit_later(uv_timer_t* handle) {
+	struct commit_info* info = (struct commit_info*)handle->data;
+	commit_now(info->path, info->words, info->characters);
+	free(info);
+	waitfor(pid);
+}
 
-void maybe_commit(size_t words, size_t characters) {
+static void maybe_commit(const char* path, size_t words, size_t characters) {
 	// 60 characters = 1min to commit (60s), 600 characters means commit now.
 	// m = (60 - 0) / (60 - 600) = - 60 / 540
 	// d = m * c + b, 0 = m * 60 + b, b = -m * 60 = 3600 / 540 = 60 / 9
@@ -108,13 +166,22 @@ void maybe_commit(size_t words, size_t characters) {
 
 	if(d <= 1) {
 		uv_timer_stop(&committer);
-		commit_now();
+		commit_now(path,words,characters);
 	} else {
 		time_t now = time(NULL);
-		if(now + d > next_commit) {
+		if(now + d > ctx->next_commit) {
+			// keep pushing the timer ahead, so we change as much as possible before committing
 			uv_timer_stop(&committer);
-			next_commit = now + d;
-			uv_timer_start(&committer, commit_now, d * 1000, 0);
+			ctx->next_commit = now + d;
+			struct commit_info* info = malloc(sizeof(struct commit_info));
+			info->path = path;
+			info->words = words;
+			info->characters = characters;
+			if(ctx->committer->data) {
+				free(ctx->committer->data);
+			}
+			ctx->committer->data = info;
+			uv_timer_start(&ctx->committer, commit_later, d * 1000, 0);
 		}
 	}
 }
