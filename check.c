@@ -203,11 +203,11 @@ static void maybe_commit(CC ctx, char* path, size_t words, size_t characters) {
 
 	// don't bother waiting if it's more than an hour
 	if(d > 3600) return;
-
 	if(d <= 1) {
 		uv_timer_stop(&ci.committer);
 		commit_now(path,words,characters);
 	} else {
+		printf("waiting %d\n",d);
 		time_t now = time(NULL);
 		if(now + d > ci.next_commit) {
 			// keep pushing the timer ahead, so we change as much as possible before committing
