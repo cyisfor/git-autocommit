@@ -119,7 +119,7 @@ static void check_path(CC ctx, char* path, u16 len) {
 	}
 	waitfor(pid);
 
-	char* template = "derpXXXXXX";
+	char template[] = "derpXXXXXX";
 	int io = mkstemp(template);
 	unlink(template);
 	pid = fork();
@@ -131,7 +131,7 @@ static void check_path(CC ctx, char* path, u16 len) {
 	}
 	waitfor(pid);
 	struct stat st;
-	assert(fstat(io,&st));
+	assert(0==fstat(io,&st));
 	char* diff = mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, io, 0);
 	assert(diff != MAP_FAILED);
 
@@ -146,10 +146,7 @@ static void check_path(CC ctx, char* path, u16 len) {
 			// we're at the newline before a -word or +word
 			++words;
 			size_t j = i+3;
-			for(;;) {
-				if(j >= st.st_size) {
-					goto DONE;
-				}
+			for(;j<st.st_size;++j) {
 				if(diff[j] == '\n') break;
 				++characters;
 			}
@@ -167,7 +164,7 @@ static void commit_now(const char* path, size_t words, size_t characters) {
 		char message[0x1000];
 		snprintf(message,0x1000,"auto (%s) %lu %lu",
 						 path, words, characters);
-		execlp("git","commit","-a","-m",message,NULL);
+		execlp("git","git","commit","-a","-m",message,NULL);
 	}
 	waitfor(pid);
 }
@@ -191,7 +188,7 @@ static void maybe_commit(CC ctx, const char* path, size_t words, size_t characte
 	// d = 90 - 3 * w / 2
 	double delay2 = 90 - 3 * words / 2.0;
 	double d = delay1;
-	if(delay1 < delay2) d = delay2;
+	if(delay1 > delay2) d = delay2;
 
 	// don't bother waiting if it's more than an hour
 	if(d > 3600) return;
