@@ -8,6 +8,8 @@
 #include <stdint.h> // uint*
 #include <sys/wait.h> // waitpid
 #include <ctype.h> // isspace
+#include <math.h> // log
+
 
 typedef uint16_t u16;
 typedef int32_t i32;
@@ -245,12 +247,12 @@ static void commit_later(uv_timer_t* handle) {
 
 static void maybe_commit(CC ctx, char* path, i32 lines, i32 words, i32 characters) {
 	// see interpolate.py
-	double d = (characters - 600) * (539 * characters - 32939)/5391.0;
+	double d = -597.925308042 * log(characters) + 3310.99945607;
 	double test = (words - 50)*(2351*words - 23951)/294.0;
 	if(test < d) d = test;
 	test = (lines - 10)*(41*lines - 241)/3.0;
 	if(test < d) d = test;
-
+	abort();
 	// don't bother waiting if it's more than an hour
 	if(d >= 3600) return;
 	if(d <= 1) {
