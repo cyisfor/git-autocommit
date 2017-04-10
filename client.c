@@ -20,8 +20,30 @@ int main(int argc, char *argv[])
 		exit(0);
 	}
 
+	int tries = 0;
+	uv_timer_t trying;
+	uv_timer_init(uv_default_loop(),&trying);
+
 	void on_connect(uv_connect_t* req, int status) {
-		assert(status == 0);
+		if(status < 0) {
+			if(tries != 3) return;
+			// start the server
+			int pid = fork();
+			if(pid == 0) {
+				// ...client -> ...main
+				puts("starting server...");
+				size_t len = strlen(argv[0]);
+				argv[len-6] = 'm';
+				argv[len-5] = 'a';
+				argv[len-4] = 'i';
+				argv[len-3] = 'n';
+				argv[len-2] = '\0';
+				execv(argv[0],argv);
+			}			
+		}
+		tries = 0;
+		uv_timer_stop(&trying);
+
 		uv_buf_t dest;
 		dest.len = strlen(argv[1])+2;
 		dest.base = alloca(dest.len);
@@ -29,8 +51,11 @@ int main(int argc, char *argv[])
 		memcpy(dest.base + 2, argv[1], dest.len - 2);
 		uv_write(&writing, (uv_stream_t*) &conn, &dest, 1, cleanup);
 	}
-	
-	uv_tcp_connect(&derp, &conn, (const struct sockaddr*) &addr, on_connect);
+
+	void try_connect() {
+		uv_tcp_connect(&derp, &conn, (const struct sockaddr*) &addr, on_connect);
+	}
+	uv_timer_start(&trying, try_connect, 0, 1000);
 	uv_run(uv_default_loop(), UV_RUN_DEFAULT);
 	return 0;
 }

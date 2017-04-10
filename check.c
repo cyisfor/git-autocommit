@@ -63,6 +63,7 @@ static void alloc_cb(uv_handle_t* handle, size_t size, uv_buf_t* ret) {
 static void on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
 	CC ctx = (CC) stream;
 	if(nread < 0 || nread == UV_EOF) {
+		puts("cleanup");
 		free(ctx->committer.data);
 		uv_timer_stop(&ctx->committer);
 		free(ctx->buf);
@@ -126,8 +127,7 @@ static void check_path(CC ctx, char* path, u16 len) {
 	if(pid == 0) {
 		dup2(io,1);
 		close(io);
-		execlp("git","git","diff","HEAD",
-					 "--word-diff=porcelain",NULL);
+		execlp("git","git","diff","HEAD","--word-diff=porcelain",NULL);
 	}
 	waitfor(pid);
 	struct stat st;
