@@ -3,6 +3,13 @@
 
 #include "repo.h"
 
+#include <git2/diff.h>
+#include <git2/refs.h>
+#include <git2/tree.h>
+#include <git2/index.h>
+
+
+
 #include <assert.h>
 #include <stdlib.h> // malloc
 #include <string.h> // memcpy
@@ -128,7 +135,7 @@ static void check_path(CC ctx, char* path, u16 len) {
 	const git_oid *oid = git_reference_target(ref);
 	assert(oid != NULL);
 
-	repo_check(git_tree_lookup(&old_tree, repo, oid));
+	repo_check(git_tree_lookup(&head, repo, oid));
 	git_reference_free(ref);
 
 	git_diff_options options = GIT_DIFF_OPTIONS_INIT;
@@ -141,9 +148,9 @@ static void check_path(CC ctx, char* path, u16 len) {
 	repo_check(git_diff_tree_to_workdir_with_index(
 							 &diff,
 							 repo,
-							 old_tree,
-							 options));
-	git_tree_free(old_tree);
+							 head,
+							 &options));
+	git_tree_free(head);
 
 	i32 characters = 0;
 	i32 words = 0;
@@ -157,6 +164,7 @@ static void check_path(CC ctx, char* path, u16 len) {
 		puts("------------------");
 		fwrite(hunk->header,hunk->header_len,1,stdout);
 		puts("\n------------------");
+		return 0;
 	}
 
 	int on_line(const git_diff_delta *delta, /**< delta that contains this data */
@@ -166,7 +174,15 @@ static void check_path(CC ctx, char* path, u16 len) {
 		fputs("uh line",stdout);
 		fwrite(line->content,line->content_len,1,stdout);
 		putchar('\n');
+		return 0;
 	}
+
+	int on_file(const git_diff_delta *delta,
+							float progress,
+							void *payload) {
+		printf("Um %.2lf%%\n",progress * 100);
+	}
+	
 
 	repo_check(git_diff_foreach(diff, on_file, on_hunk, NULL, NULL, NULL));
 	abort();
