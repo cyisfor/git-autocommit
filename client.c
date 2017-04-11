@@ -6,6 +6,8 @@
 #include <unistd.h> // fork, execv
 #include <stdbool.h> 
 #include <sys/wait.h> // waitpid
+#include <stdarg.h> // va_*
+
 
 
 typedef uint16_t u16;
@@ -13,7 +15,30 @@ typedef uint16_t u16;
 int main(int argc, char *argv[])
 {
 	// first arg = name of file that was saved
-	assert(argc == 2);
+
+	int log = open("/home/.local/logs/autocommit.log", O_WRONLY|O_CREAT|O_APPEND, 0644);
+	assert(log >= 0);
+	dup2(1,log+1); // log+1 isn't in use
+	FILE* message = fdopen(log+1,"wt");
+	dup2(log,1);
+	dup2(log,2);
+	close(log);
+
+	// now everything written to "message" goes to stdout (emacs)
+	// while stdout/err goes to a log
+
+	void bye(const char* fmt, ...) {
+		va_list args;
+		va_start(args,fmt);
+		vfprintf(message, fmt, args);
+		va_end(args);
+		fputc('\n',message);
+	}
+
+	const char* path = getenv("file");
+	if(path == NULL) {
+		bye("no file provided");
+	}
 
 	/* if we start out in a subdirectory of a repository, we don't want to run a
 		 second server instance of the same repository. Just chdir to the top level.
@@ -40,6 +65,7 @@ int main(int argc, char *argv[])
 	assert(pid == waitpid(pid,&status,0));
 	if(!(WIFEXITED(status) && 0 == WEXITSTATUS(status))) {
 		// not in a git repository
+		bye("%s no git repository",path);
 		exit(status);
 	}
 	// amt + 1 is always a newline
@@ -55,7 +81,7 @@ int main(int argc, char *argv[])
 		exit(0);
 	}
 
-	bool quitting = (0 == strcmp(argv[1],"--quit"));
+	bool quitting = (NULL != getenv("quit"));
 
 	int tries = 0;
 	uv_timer_t trying;
@@ -68,7 +94,13 @@ int main(int argc, char *argv[])
 			// start the server
 			int pid = fork();
 			if(pid == 0) {
-				// ...client -> ...main
+				setsid();
+				// emacs tries to trap you by opening a secret unused pipe
+				int i;
+				for(i=log+2;i < log+4; ++i) {
+					close(i);
+				}
+				// ...client -> ...server
 				size_t len = strlen(argv[0]);
 				argv[0][len-6] = 's';
 				argv[0][len-5] = 'e';
@@ -77,8 +109,7 @@ int main(int argc, char *argv[])
 				argv[0][len-2] = 'e';
 				argv[0][len-1] = 'r';
 				name[0] = '@'; // IPC is hard...
-				argv[1] = name;
-				execv(argv[0],argv);
+				execl(argv[0],argv[0],name,NULL);
 			}
 			printf("starting server %d\n",pid);
 			return;
@@ -93,10 +124,10 @@ int main(int argc, char *argv[])
 			*((u16*)dest.base) = 0;
 			dest.base[2] = 0;
 		} else {
-			dest.len = strlen(argv[1])+2;
+			dest.len = strlen(path)+2;
 			dest.base = alloca(dest.len);
 			*((u16*)dest.base) = dest.len - 2;
-			memcpy(dest.base + 2, argv[1], dest.len - 2);
+			memcpy(dest.base + 2, path, dest.len - 2);
 		}
 		uv_write(&writing, (uv_stream_t*) &conn, &dest, 1, cleanup);
 	}
