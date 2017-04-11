@@ -3,6 +3,9 @@
 
 #include <uv.h>
 
+#include <sys/socket.h> // 
+#include <sys/un.h> // 
+
 #include <stdlib.h> // exit
 #include <assert.h>
 #include <string.h> // strlen
@@ -13,6 +16,8 @@
 #include <fcntl.h> // open* O_PATH
 #include <pwd.h> // getpw*
 #include <sys/stat.h> // mkdir
+#include <error.h> // 
+
 
 
 int open_home(void) {
@@ -80,13 +85,15 @@ int main(int argc, char *argv[])
 	*/
 
 	// the name of the socket is \0 plus the git top directory
-	char name[PATH_MAX+2] = "\0";
+	struct sockaddr_un addr = {
+	sun_family: AF_UNIX,
+	};
 
 	if(0 != repo_init()) {
 		bye("couldn't find a git repository");
 	}
 	// repo_init chdirs to the git top directory
-	realpath(".",name+1);
+	getcwd(addr.sun_path+1, 107);
 	//printf("Found git dir '%s'\n",name+1);
 	
 	uv_pipe_t conn;
@@ -104,9 +111,10 @@ int main(int argc, char *argv[])
 	uv_timer_init(uv_default_loop(),&trying);
 
 	void on_connect(uv_connect_t* req, int status) {
-		if(status < 0) {
+		if(status != 0) {
 			if(quitting) exit(0);
 			if(++tries != 3) return;
+			error(0,status,"ugh");
 			// start the server
 			int pid = fork();
 			if(pid == 0) {
@@ -127,8 +135,7 @@ int main(int argc, char *argv[])
 				argv[0][len-3] = 'v';
 				argv[0][len-2] = 'e';
 				argv[0][len-1] = 'r';
-				name[0] = '@'; // IPC is hard...
-				execl(argv[0],argv[0],name,NULL);
+				execl(argv[0],argv[0],addr.sun_path+1,NULL);
 			}
 			fprintf(message,"AC: starting server %d\n",pid);
 			return;
@@ -153,8 +160,15 @@ int main(int argc, char *argv[])
 
 	uv_connect_t derp;
 	void try_connect() {
-		// the name of the socket is \0 plus the git top directory
-		uv_pipe_connect(&derp, &conn, name, on_connect);
+		// uv_pipe_connect fails on abstract sockets
+		// https://github.com/joyent/libuv/issues/1486
+		int sock = socket(AF_UNIX, SOCK_STREAM, 0);
+		if(0 == connect(sock,(struct sockaddr*)&addr,sizeof(addr))) {
+			assert(0==uv_pipe_open(&conn, sock));
+			on_connect(&derp, 0);
+		} else {
+			on_connect(&derp, errno);
+		}
 	}
 	uv_timer_start(&trying, try_connect, 0, 200);
 	uv_run(uv_default_loop(), UV_RUN_DEFAULT);
