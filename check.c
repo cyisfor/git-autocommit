@@ -8,6 +8,7 @@
 #include <git2/tree.h>
 #include <git2/index.h>
 #include <git2/commit.h>
+#include <git2/signature.h>
 
 
 
@@ -24,14 +25,6 @@
 
 
 typedef int32_t i32;
-
-static void waitfor(int pid) {
-	assert(pid > 0);
-	int status;
-	assert(pid == waitpid(pid,&status,0));
-	assert(WIFEXITED(status));
-	assert(WEXITSTATUS(status) == 0);
-}
 
 struct check_context {
 	uv_tcp_t stream;
@@ -120,20 +113,15 @@ void check_accept(uv_stream_t* server) {
 
 static void maybe_commit(CC ctx, char* path, i32 lines, i32 words, i32 characters);
 
-void check_path(CC ctx, char* path, u16 len) {
-	git_index* idx;
-	repo_check(git_repository_index(&idx, repo));
-	repo_check(git_index_add_bypath(idx, path));
-	git_index_free(idx);
-
-	git_diff* diff = NULL;
-	git_tree* head = NULL;
+static git_commit* get_head(void) {
 	git_reference* master = NULL;
+	git_reference* derp = NULL;
+	git_commit* head = NULL;
 	repo_check(git_repository_head(&master, repo));
 	//printf("umm %s\n",git_reference_shorthand(master));
-	git_reference* derp = NULL;
 	repo_check(git_reference_resolve(&derp, master));
 	git_reference_free(master);
+		
 	//printf("umm %s\n",git_reference_shorthand(derp));
 	const git_oid *oid = git_reference_target(derp);
 	assert(oid != NULL);
@@ -141,10 +129,24 @@ void check_path(CC ctx, char* path, u16 len) {
 	git_oid_fmt(boop, oid);
 	//printf("OID %s\n",boop);
 
-	git_commit* comm;
-	repo_check(git_commit_lookup(&comm, repo, oid));
-	git_reference_free(derp);	
-	repo_check(git_commit_tree(&head, comm));	
+	repo_check(git_commit_lookup(&head, repo, oid));
+	git_reference_free(derp);
+	return head;
+}
+
+void check_path(CC ctx, char* path, u16 len) {
+	git_index* idx;
+	repo_check(git_repository_index(&idx, repo));
+	repo_check(git_index_add_bypath(idx, path));
+	git_index_write(idx);
+	git_index_free(idx);
+
+	git_diff* diff = NULL;
+	git_tree* headtree = NULL;
+
+	git_commit* head = get_head();
+	repo_check(git_commit_tree(&headtree, head));	
+	git_commit_free(head);
 
 	git_diff_options options = GIT_DIFF_OPTIONS_INIT;
 	options.context_lines = 0;
@@ -156,9 +158,9 @@ void check_path(CC ctx, char* path, u16 len) {
 	repo_check(git_diff_tree_to_workdir_with_index(
 							 &diff,
 							 repo,
-							 head,
+							 headtree,
 							 &options));
-	git_tree_free(head);
+	git_tree_free(headtree);
 
 	i32 characters = 0;
 	i32 words = 0;
@@ -169,10 +171,10 @@ void check_path(CC ctx, char* path, u16 len) {
 							const git_diff_line *line,   /**< line data */
 							void *payload) {
 
-		fputs("uh line",stdout);
+/*		fputs("uh line",stdout);
 		fwrite(line->content,line->content_len,1,stdout);
 		putchar('\n');
-		
+*/	
 		++lines;
 		const char* l = line->content;
 		size_t llen = line->content_len;
@@ -238,7 +240,7 @@ void check_path(CC ctx, char* path, u16 len) {
 	int on_file(const git_diff_delta *delta,
 							float progress,
 							void *payload) {
-		printf("Um %.2lf%%\n",progress * 100);
+		//printf("Um %.2lf%%\n",progress * 100);
 		return 0;
 	}
 	
@@ -249,18 +251,52 @@ void check_path(CC ctx, char* path, u16 len) {
 }
 
 
-static void commit_now(char* path, i32 lines, i32 words, i32 characters) {
-	int pid = fork();
-	if(pid == 0) {
-		char message[0x1000];
-		ssize_t amt = snprintf(message,0x1000,"auto (%s) %lu %lu %lu",
-													 path, lines, words, characters);
-		write(3, "AC: ",4);
-		write(3, message,amt); // stdout fileno in a weird place to stop unexpected output
-		write(3, "\n",1);
-		execlp("git","git","commit","-a","-m",message,NULL);
-	}
-	waitfor(pid);
+static void commit_now(CC ctx, char* path, i32 lines, i32 words, i32 characters) {
+	git_signature *me = NULL;
+	git_index* idx = NULL;
+	repo_check(git_signature_now(&me, "autocommit", "autocommit"));
+	char message[0x1000];
+	ssize_t amt = snprintf(message,0x1000,"auto (%s) %lu %lu %lu",
+												 path, lines, words, characters);
+	write(3, "AC: ",4);
+	write(3, message,amt); // stdout fileno in a weird place to stop unexpected output
+	write(3, " ",1);
+
+	repo_check(git_repository_index(&idx, repo));
+	git_oid treeoid;
+	repo_check(git_index_write_tree(&treeoid, idx));
+	git_tree* tree = NULL;
+	repo_check(git_tree_lookup(&tree, repo, &treeoid));
+
+	git_oid new_commit;
+
+	git_commit* head = get_head();
+
+	repo_check(git_commit_create(
+							 &new_commit,
+							 repo,
+							 "HEAD", /* name of ref to update */
+							 me, /* author */
+							 me, /* committer */
+							 "UTF-8", /* message encoding */
+							 message,  /* message */
+							 tree, /* root tree */
+							 1,                           /* parent count */
+							 (const git_commit**) &head)); /* parents */
+
+	git_index_write(idx);
+	git_index_free(idx);
+
+	
+	char oid_hex[GIT_OID_HEXSZ+1] = { 0 };
+	git_oid_fmt(oid_hex, &new_commit);
+	write(3,oid_hex,GIT_OID_HEXSZ);
+	write(3,"\n",1);
+
+	git_commit_free(head);
+	git_tree_free(tree);
+	git_signature_free(me);
+	
 	free(path); // won't need this after the commit is done...
 }
 
@@ -283,7 +319,7 @@ void check_init(void) {
 }
 
 static void commit_later(uv_timer_t* handle) {
-	commit_now(ci.path, ci.lines, ci.words, ci.characters);
+	commit_now((CC)handle->data, ci.path, ci.lines, ci.words, ci.characters);
 	ci.path = NULL; // just in case
 }
 
@@ -345,7 +381,7 @@ static void maybe_commit(CC ctx, char* path, i32 lines, i32 words, i32 character
 	if(d >= 3600) return;
 	if(d <= 1) {
 		uv_timer_stop(&ci.committer);
-		commit_now(path,lines,words,characters);
+		commit_now(ctx,path,lines,words,characters);
 	} else {
 		time_t now = time(NULL);
 		if(ci.next_commit == 0 || now + d < ci.next_commit) {
