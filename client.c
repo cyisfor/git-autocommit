@@ -21,8 +21,7 @@ int main(int argc, char *argv[])
 	dup2(1,log+1); // log+1 isn't in use
 	dup2(log,1);
 	dup2(log,2);
-	dup2(log+1,log);
-	close(log+1);
+	++log;
 	FILE* message = fdopen(log,"wt");
 
 	// now everything written to "message" goes to stdout (emacs)
@@ -98,7 +97,7 @@ int main(int argc, char *argv[])
 				setsid();
 				// emacs tries to trap you by opening a secret unused pipe
 				int i;
-				for(i=log+2;i < log+4; ++i) {
+				for(i=log+1;i < log+3; ++i) {
 					close(i);
 				}
 				dup2(log,1);

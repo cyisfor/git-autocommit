@@ -221,12 +221,14 @@ DONE:
 
 
 static void commit_now(char* path, i32 lines, i32 words, i32 characters) {
-	puts("committing");
 	int pid = fork();
 	if(pid == 0) {
 		char message[0x1000];
-		snprintf(message,0x1000,"auto (%s) %lu %lu %lu",
-						 path, lines, words, characters);
+		ssize_t amt = snprintf(message,0x1000,"auto (%s) %lu %lu %lu",
+													 path, lines, words, characters);
+		write(3, "AC: ",4);
+		write(3, message,amt); // stdout fileno in a weird place to stop unexpected output
+		write(3, "\n",1);
 		execlp("git","git","commit","-a","-m",message,NULL);
 	}
 	waitfor(pid);
@@ -319,7 +321,9 @@ static void maybe_commit(CC ctx, char* path, i32 lines, i32 words, i32 character
 		time_t now = time(NULL);
 		if(ci.next_commit == 0 || now + d < ci.next_commit) {
 			// keep pushing the timer back, so we commit sooner if more changes
-			printf("waiting %d\n",(int)d);
+			char buf[0x200];
+			write(3,buf,snprintf(buf,0x200,"AC: %s waiting %.2f\n",path,d)); // weird stdout fd
+
 			uv_timer_stop(&ci.committer);
 			ci.next_commit = now + d;
 			ci.path = path;
