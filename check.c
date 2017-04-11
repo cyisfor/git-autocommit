@@ -257,13 +257,20 @@ static void commit_later(uv_timer_t* handle) {
 }
 
 static void maybe_commit(CC ctx, char* path, i32 lines, i32 words, i32 characters) {
-	/* if between 1 and 60s, go between 3600 and 60, if between 60 and 600, go between 60 and 0 */
+	/* if between 1 and 30, go between 3600 and 300s,
+		 if between 30 and 60, go between 300 and 60s
+		 if between 60 and 600, go between 60 and 0 */
+	double between(int x1, int x2, int y1, int y2, int x) {
+		return y2 + (y1 - y2) * (x - x2) / ((float)(x1 - x2));
+	}
 	double chars(void) {
 		if(characters >= 1) {
-			if(characters < 60) {
-				return 3600 - (characters - 1) / (60.0-1) * 3600;
+			if(characters < 30) {
+				return between(1,30,3600,300,characters);
+			} else if(characters < 60) {
+				return between(30,60,300,60,characters);
 			} else if(characters < 600) {
-				return 60 - (characters - 60) / (600.0-60) * 60;
+				return between(60,600,60,0,characters);
 			} else {
 				return 0;
 			}
@@ -274,9 +281,9 @@ static void maybe_commit(CC ctx, char* path, i32 lines, i32 words, i32 character
 		/* if between 1 and 10, 3600 to 60, if between 10 and 50, 60 to 0 */
 		if(words >= 1) {
 			if(words < 10) {
-				return 3600 - (words - 1) / (10.0-1) * 3600;
+				return between(1,10,3600,60,words);
 			} else if(words < 50) {
-				return 60 - (words - 10) / (50.0-10) * 60;
+				return between(10,50,60,0,words);
 			} else {
 				return 0;
 			}
@@ -287,9 +294,9 @@ static void maybe_commit(CC ctx, char* path, i32 lines, i32 words, i32 character
 		/* if between 1 and 5, 3600 to 60, if between 5 and 10, 60 to 0 */
 		if(lines >= 1) {
 			if(lines < 5) {
-				return 3600 - (lines - 1) / (5.0-1) * 3600;
+				return between(1,5,3600,60,lines);
 			} else if(lines < 10) {
-				return 60 - (lines - 5) / (10.0-5) * 60;
+				return between(5,10,60,0,lines);
 			} else {
 				return 0;
 			}

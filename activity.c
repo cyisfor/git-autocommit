@@ -6,7 +6,7 @@ static void too_idle(uv_timer_t* handle) {
 	exit(0);
 }
 
-#define DELAY 60*60 * 1000
+#define DELAY 60 * 60 * 1000
 
 void activity_poke(void) {
 	uv_timer_stop(&activity);
