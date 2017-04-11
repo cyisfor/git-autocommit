@@ -7,7 +7,11 @@
 #include <errno.h> // 
 
 git_repository* repo = NULL;
-void repo_init(void) {
+#ifdef RETURN_STUPIDLY
+const char repo_path[PATH_MAX];
+#endif
+
+int repo_init(void) {
 	// test for root ugh
 	char derpd[2];
 	int cwd = -1;
@@ -20,15 +24,18 @@ void repo_init(void) {
 		if(getcwd(derpd,2)) {
 			if(errno == ERANGE) continue;
 			if(derpd[0] == '/' && derpd[1] == '\0') {
-				fprintf(stderr,"AC: couldn't find a git repository\n");
-				exit(1);
+				return 1;
 			}
 		}
 		// go up until we find one
 		assert(0 == chdir(".."));
 	}
+#ifdef RETURN_STUPIDLY
+	assert(NULL != realpath(".",repo_path));
 	if(cwd != -1) {
 		fchdir(cwd);
 		close(cwd);
 	}
+#endif
+	return 0;
 }
