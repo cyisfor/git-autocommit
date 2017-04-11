@@ -20,7 +20,6 @@
 #include <sys/wait.h> // waitpid
 #include <ctype.h> // isspace
 
-typedef uint16_t u16;
 typedef int32_t i32;
 
 static void waitfor(int pid) {
@@ -38,10 +37,6 @@ struct check_context {
 	size_t space; // space in buffer
 	char* buf;
 };
-
-typedef struct check_context *CC;
-
-static void check_path(CC ctx, char* path, u16 len);
 
 #define BLOCKSIZE 512
 
@@ -122,7 +117,7 @@ void check_accept(uv_stream_t* server) {
 
 static void maybe_commit(CC ctx, char* path, i32 lines, i32 words, i32 characters);
 
-static void check_path(CC ctx, char* path, u16 len) {
+void check_path(CC ctx, char* path, u16 len) {
 	git_index* idx;
 	repo_check(git_repository_index(&idx, repo));
 	repo_check(git_index_add_bypath(idx, path));
@@ -184,7 +179,7 @@ static void check_path(CC ctx, char* path, u16 len) {
 	}
 	
 
-	repo_check(git_diff_foreach(diff, on_file, on_hunk, NULL, NULL, NULL));
+	repo_check(git_diff_foreach(diff, on_file, NULL, on_hunk, NULL, NULL));
 	abort();
 	maybe_commit(ctx, path, lines, words, characters);
 }

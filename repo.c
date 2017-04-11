@@ -1,10 +1,6 @@
 #define _GNU_SOURCE
 #include "repo.h"
 
-#include <git2/errors.h> 
-
-
-
 #include <unistd.h> // chdir
 #include <fcntl.h> // openat
 #include <assert.h> // 
@@ -45,7 +41,7 @@ int repo_init(void) {
 	return 0;
 }
 
-void repo_check(int e) {
+void repo_check(git_error_code e) {
 	if(e == 0) return;
 	const git_error* err = giterr_last();
 	if(err != NULL) {
