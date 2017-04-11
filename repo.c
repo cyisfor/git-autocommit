@@ -31,6 +31,7 @@ int repo_init(void) {
 		// go up until we find one
 		assert(0 == chdir(".."));
 	}
+	assert(repo != NULL);
 #ifdef RETURN_STUPIDLY
 	assert(NULL != realpath(".",repo_path));
 	if(cwd != -1) {

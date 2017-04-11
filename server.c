@@ -4,6 +4,12 @@
 
 #include <assert.h>
 #include <unistd.h> // getcwd
+#include <sys/socket.h> // 
+#include <sys/un.h> // 
+
+#include <error.h>
+#include <errno.h> 
+
 
 
 void on_connect(uv_stream_t* server, int status) {
@@ -16,15 +22,16 @@ int main(int argc, char *argv[])
 {
 	repo_init();
 	
-	char* name;
+	struct sockaddr_un addr = {
+	sun_family: AF_UNIX,
+	};
+
 	if(argc == 2) {
-		name = argv[1];
-		name[0] = '\0';
+		memcpy(addr.sun_path+1,argv[1],strlen(argv[1]));
 	} else {
-		name = alloca(PATH_MAX+2);
-		realpath(".",name+1);
-		name[0] = '\0';
+		getcwd(addr.sun_path+1,107);
 	}
+	addr.sun_path[0] = '\0';
 
 	// 1 = stdout
 	// 2 = message log
@@ -37,8 +44,11 @@ int main(int argc, char *argv[])
 	
 	uv_pipe_t server;
 	uv_pipe_init(uv_default_loop(), &server, 1);
-	assert(getcwd(name+1,0x200-1));
-	uv_pipe_bind(&server, name);
+	int sock = socket(AF_UNIX, SOCK_STREAM, 0);
+	if(0!=bind(sock,(struct sockaddr*)&addr, sizeof(addr))) {
+		error(errno,errno,"Could not bind!");
+	}
+	assert(0==uv_pipe_open(&server, sock));
 	uv_listen((uv_stream_t*)&server, 5, on_connect);
 	uv_run(uv_default_loop(), UV_RUN_DEFAULT);
 	return 0;
