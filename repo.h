@@ -1,10 +1,9 @@
 // holy fuuuuuuuuuck
 #include <git2/repository.h>
-#include <limits.h> // PATH_MAX
+#include <git2/errors.h> 
 
 
 extern git_repository* repo;
-//const char repo_path[PATH_MAX];
 int repo_init(void);
 
-void repo_check(int);
+void repo_check(git_error_code);

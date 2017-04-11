@@ -125,13 +125,23 @@ void check_path(CC ctx, char* path, u16 len) {
 
 	git_diff* diff = NULL;
 	git_tree* head = NULL;
-	git_reference* ref = NULL;
-	repo_check(git_repository_head(&ref, repo));
-	const git_oid *oid = git_reference_target(ref);
+	git_reference* master = NULL;
+	repo_check(git_repository_head(&master, repo));
+	printf("umm %s\n",git_reference_shorthand(master));
+	git_reference* derp = NULL;
+	repo_check(git_reference_resolve(&derp, master));
+	git_reference_free(master);
+	printf("umm %s\n",git_reference_shorthand(derp));
+	const git_oid *oid = git_reference_target(derp);
 	assert(oid != NULL);
+	char boop[GIT_OID_HEXSZ];
+	git_oid_fmt(boop, oid);
+	printf("OID %s\n",boop);
 
-	repo_check(git_tree_lookup(&head, repo, oid));
-	git_reference_free(ref);
+	git_commit* comm;
+	repo_check(git_commit_lookup(&comm, repo, oid));
+	git_reference_free(derp);	
+	repo_check(git_commit_tree(&head, comm));	
 
 	git_diff_options options = GIT_DIFF_OPTIONS_INIT;
 	options.context_lines = 0;
