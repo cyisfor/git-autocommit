@@ -7,11 +7,15 @@
 #include <stdbool.h> 
 #include <sys/wait.h> // waitpid
 #include <stdarg.h> // va_*
+#include <fcntl.h> // open*
+#include <pwd.h> // getpw*
+
+
 
 int open_home(void) {
 	const char* path = getenv("HOME");
 	if(path == NULL) {
-		path = getpwuid(getuid()).pw_dir;
+		path = getpwuid(getuid())->pw_dir;
 		assert(path != NULL);
 	}
 	// O_PATH works even if the directory has only the execute bit set.
