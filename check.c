@@ -117,10 +117,7 @@ static void check_path(CC ctx, char* path, u16 len) {
 	int pid = fork();
 	if(pid == 0) {
 		//printf("adding %s\n",path);
-		char* args[] = {
-			"git","add",path, NULL
-		};
-		execvp("git",args);
+		execl("git","add",path,NULL);
 	}
 	waitfor(pid);
 

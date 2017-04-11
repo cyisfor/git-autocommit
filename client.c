@@ -8,7 +8,31 @@
 #include <sys/wait.h> // waitpid
 #include <stdarg.h> // va_*
 
+int open_home(void) {
+	const char* path = getenv("HOME");
+	if(path == NULL) {
+		path = getpwuid(getuid()).pw_dir;
+		assert(path != NULL);
+	}
+	// O_PATH works even if the directory has only the execute bit set.
+	return open(path,O_PATH|O_DIRECTORY);
+}
 
+void move_to(int loc, ...) {
+	va_list a;
+	va_start(loc,a);
+	int cur = loc;
+	for(;;) {
+		const char* name = va_next(a,const char*);
+		if(name == NULL) break;
+		mkdirat(cur,name,0755);
+		int new = openat(cur,name,O_PATH);
+		assert(new >= 0);
+		close(cur);
+		cur = new;
+	}
+	dup2(cur,loc);
+}
 
 typedef uint16_t u16;
 
@@ -16,13 +40,16 @@ int main(int argc, char *argv[])
 {
 	// first arg = name of file that was saved
 
-	int log = open("/home/.local/logs/autocommit.log", O_WRONLY|O_CREAT|O_APPEND, 0644);
+	int logloc = open_home();
+	move_to(logloc, ".local", "logs", NULL);
+	
+	int log = openat(logloc,"autocommit.log", O_WRONLY|O_CREAT|O_APPEND, 0644);
 	assert(log >= 0);
-	dup2(1,log+1); // log+1 isn't in use
+	dup2(1,logloc); // logloc isn't in use anymore
 	dup2(log,1);
 	dup2(log,2);
 	close(log);
-	++log;
+	log = logloc; // HAX
 	FILE* message = fdopen(log,"wt");
 
 	// now everything written to "message" goes to stdout (emacs)
