@@ -64,7 +64,7 @@ static void cleanup(uv_handle_t* h) {
 	CC ctx = (CC) h;
 	free(ctx->buf);
 	free(ctx);
-	puts("cleaned up");
+	//puts("cleaned up");
 }
 
 static void on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
@@ -116,7 +116,7 @@ static void maybe_commit(CC ctx, char* path, i32 lines, i32 words, i32 character
 static void check_path(CC ctx, char* path, u16 len) {
 	int pid = fork();
 	if(pid == 0) {
-		printf("adding %s\n",path);
+		//printf("adding %s\n",path);
 		char* args[] = {
 			"git","add",path, NULL
 		};

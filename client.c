@@ -45,7 +45,7 @@ int main(int argc, char *argv[])
 	// amt + 1 is always a newline
 	name[amt] = '\0';
 	chdir(name+1);
-	printf("Found git dir '%s'\n",name+1);
+	//printf("Found git dir '%s'\n",name+1);
 	
 	uv_pipe_t conn;
 	uv_write_t writing;
