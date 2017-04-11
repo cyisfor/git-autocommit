@@ -1,4 +1,6 @@
 #include "check.h"
+#include "activity.h"
+
 #include <assert.h>
 #include <stdlib.h> // malloc
 #include <string.h> // memcpy
@@ -72,6 +74,7 @@ static void on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
 		return;
 	}
 	ctx->read += nread;
+	activity_poke();
 
 	// now read all the paths we see.
 	for(;;) {
@@ -79,6 +82,16 @@ static void on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
 		if(ctx->read < ctx->checked + 2) break;
 		// no ntohs needed since it'd be silly not to run client/server on the same machine.
 		u16 size = *((u16*)(ctx->buf + ctx->checked));
+		if(size == 0) {
+			// special message incoming
+			if(ctx->read < ctx->checked + 3) break;
+			switch(ctx->buf[ctx->checked+1]) {
+			case 0:
+				exit(0);
+			};
+			ctx->checked += 3; // size plus message
+			continue;
+		}
 		// the path hasn't finished coming in yet, break
 		if(ctx->read < ctx->checked + 2 + size) break;
 		char* path = malloc(size+1); // +1 for the null
