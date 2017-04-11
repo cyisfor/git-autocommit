@@ -9,6 +9,7 @@
 #include <git2/index.h>
 #include <git2/commit.h>
 #include <git2/signature.h>
+#include <git2/status.h>
 
 
 
@@ -254,6 +255,24 @@ void check_path(CC ctx, char* path, u16 len) {
 static void commit_now(CC ctx, char* path, i32 lines, i32 words, i32 characters) {
 	git_signature *me = NULL;
 	git_index* idx = NULL;
+	git_diff* diff;
+	int changes = 0;
+	int check(const char *path, unsigned int status_flags, void *payload) {
+		++changes;
+		return 0;
+	}
+	git_status_options opt = GIT_STATUS_OPTIONS_INIT;
+	opt.show = GIT_STATUS_SHOW_INDEX_ONLY;
+	git_status_foreach_ext(repo,&opt,check,NULL);
+	
+	if(0 == changes) {
+		#define LITLEN(s) s, (sizeof(s)-1)
+		write(3,LITLEN("AC: no empty commits please.\n"));
+		// no empty commits, please
+		return;
+	}
+	repo_check(git_repository_index(&idx, repo));
+
 	repo_check(git_signature_now(&me, "autocommit", "autocommit"));
 	char message[0x1000];
 	ssize_t amt = snprintf(message,0x1000,"auto (%s) %lu %lu %lu",
@@ -262,7 +281,7 @@ static void commit_now(CC ctx, char* path, i32 lines, i32 words, i32 characters)
 	write(3, message,amt); // stdout fileno in a weird place to stop unexpected output
 	write(3, " ",1);
 
-	repo_check(git_repository_index(&idx, repo));
+	
 	git_oid treeoid;
 	repo_check(git_index_write_tree(&treeoid, idx));
 	git_tree* tree = NULL;
