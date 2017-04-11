@@ -139,7 +139,8 @@ void check_path(CC ctx, char* path, u16 len) {
 	git_index* idx;
 	repo_check(git_repository_index(&idx, repo));
 	git_index_read(idx, 1);
-	repo_check(git_index_add_bypath(idx, path));
+	// don't repo check b/c this fails if already added
+	git_index_add_bypath(idx, path);
 	git_index_write(idx);
 	git_index_free(idx);
 
@@ -172,11 +173,6 @@ void check_path(CC ctx, char* path, u16 len) {
 							const git_diff_hunk *hunk,   /**< hunk containing this data */
 							const git_diff_line *line,   /**< line data */
 							void *payload) {
-
-/*		fputs("uh line",stdout);
-		fwrite(line->content,line->content_len,1,stdout);
-		putchar('\n');
-*/	
 		++lines;
 		const char* l = line->content;
 		size_t llen = line->content_len;
