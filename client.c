@@ -19,10 +19,11 @@ int main(int argc, char *argv[])
 	int log = open("/home/.local/logs/autocommit.log", O_WRONLY|O_CREAT|O_APPEND, 0644);
 	assert(log >= 0);
 	dup2(1,log+1); // log+1 isn't in use
-	FILE* message = fdopen(log+1,"wt");
 	dup2(log,1);
 	dup2(log,2);
-	close(log);
+	dup2(log+1,log);
+	close(log+1);
+	FILE* message = fdopen(log,"wt");
 
 	// now everything written to "message" goes to stdout (emacs)
 	// while stdout/err goes to a log
@@ -100,6 +101,7 @@ int main(int argc, char *argv[])
 				for(i=log+2;i < log+4; ++i) {
 					close(i);
 				}
+				dup2(log,1);
 				// ...client -> ...server
 				size_t len = strlen(argv[0]);
 				argv[0][len-6] = 's';
@@ -111,7 +113,7 @@ int main(int argc, char *argv[])
 				name[0] = '@'; // IPC is hard...
 				execl(argv[0],argv[0],name,NULL);
 			}
-			printf("starting server %d\n",pid);
+			fprintf(message,"starting server %d\n",pid);
 			return;
 		}
 		tries = 0;

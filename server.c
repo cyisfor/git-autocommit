@@ -16,6 +16,12 @@ int main(int argc, char *argv[])
 	char* name = argv[1];
 	name[0] = '\0';
 
+	// 1 = stdout
+	// 2 = message log
+	dup2(1,3);
+	dup2(2,1);
+	// now 1,2 = log, 3 = stdout
+	
 	check_init();
 	activity_init();
 	uv_pipe_t server;
