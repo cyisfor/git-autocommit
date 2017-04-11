@@ -21,6 +21,7 @@ int main(int argc, char *argv[])
 	dup2(1,log+1); // log+1 isn't in use
 	dup2(log,1);
 	dup2(log,2);
+	close(log);
 	++log;
 	FILE* message = fdopen(log,"wt");
 
@@ -100,7 +101,9 @@ int main(int argc, char *argv[])
 				for(i=log+1;i < log+3; ++i) {
 					close(i);
 				}
-				dup2(log,1);
+				// don't bother saving log... emacs ignores stdout after process is gone
+				// dup2(log,1);
+				
 				// ...client -> ...server
 				size_t len = strlen(argv[0]);
 				argv[0][len-6] = 's';
@@ -112,7 +115,7 @@ int main(int argc, char *argv[])
 				name[0] = '@'; // IPC is hard...
 				execl(argv[0],argv[0],name,NULL);
 			}
-			fprintf(message,"starting server %d\n",pid);
+			fprintf(message,"AC: starting server %d\n",pid);
 			return;
 		}
 		tries = 0;
