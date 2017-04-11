@@ -7,4 +7,4 @@ client: client.o
 clean:
 	git clean -fdx
 
-testgit: testgit.o
+testgit: testgit.o repo.o

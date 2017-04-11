@@ -1,4 +1,5 @@
 // holy fuuuuuuuuuck
 #include <git2/repository.h>
 
-git_repository* repo(void);
+extern git_repository* repo;
+void repo_init(void);

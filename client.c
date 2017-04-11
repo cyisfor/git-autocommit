@@ -1,6 +1,5 @@
-#define _XOPEN_SOURCE_EXTENDED
+#define _GNU_SOURCE
 #include <uv.h>
-
 
 #include <stdlib.h> // exit
 #include <stdint.h>
@@ -10,9 +9,9 @@
 #include <stdbool.h> 
 #include <sys/wait.h> // waitpid
 #include <stdarg.h> // va_*
-#include <fcntl.h> // open*
+#include <fcntl.h> // open* O_PATH
 #include <pwd.h> // getpw*
-#include <sys/stat.h> // mkdir, O_PATH
+#include <sys/stat.h> // mkdir
 
 
 int open_home(void) {
