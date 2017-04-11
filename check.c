@@ -7,6 +7,7 @@
 #include <git2/refs.h>
 #include <git2/tree.h>
 #include <git2/index.h>
+#include <git2/commit.h>
 
 
 
@@ -19,6 +20,8 @@
 #include <stdint.h> // uint*
 #include <sys/wait.h> // waitpid
 #include <ctype.h> // isspace
+#include <stdbool.h>
+
 
 typedef int32_t i32;
 
@@ -127,16 +130,16 @@ void check_path(CC ctx, char* path, u16 len) {
 	git_tree* head = NULL;
 	git_reference* master = NULL;
 	repo_check(git_repository_head(&master, repo));
-	printf("umm %s\n",git_reference_shorthand(master));
+	//printf("umm %s\n",git_reference_shorthand(master));
 	git_reference* derp = NULL;
 	repo_check(git_reference_resolve(&derp, master));
 	git_reference_free(master);
-	printf("umm %s\n",git_reference_shorthand(derp));
+	//printf("umm %s\n",git_reference_shorthand(derp));
 	const git_oid *oid = git_reference_target(derp);
 	assert(oid != NULL);
 	char boop[GIT_OID_HEXSZ];
 	git_oid_fmt(boop, oid);
-	printf("OID %s\n",boop);
+	//printf("OID %s\n",boop);
 
 	git_commit* comm;
 	repo_check(git_commit_lookup(&comm, repo, oid));
@@ -161,24 +164,74 @@ void check_path(CC ctx, char* path, u16 len) {
 	i32 words = 0;
 	i32 lines = 0;
 
-
-	int on_hunk(const git_diff_delta *delta,
-							const git_diff_hunk *hunk,
-							void *payload) {
-		puts("uh hunk");
-		puts("------------------");
-		fwrite(hunk->header,hunk->header_len,1,stdout);
-		puts("\n------------------");
-		return 0;
-	}
-
 	int on_line(const git_diff_delta *delta, /**< delta that contains this data */
 							const git_diff_hunk *hunk,   /**< hunk containing this data */
 							const git_diff_line *line,   /**< line data */
 							void *payload) {
+
 		fputs("uh line",stdout);
 		fwrite(line->content,line->content_len,1,stdout);
 		putchar('\n');
+		
+		++lines;
+		const char* l = line->content;
+		size_t llen = line->content_len;
+		size_t j = 0;
+		bool inword = true;
+		short wchars = 0;
+		size_t lastw = 0;
+		for(;j<llen;++j) {
+			if(isspace(l[j])) {
+				if(inword) {
+					inword = 0;
+					if(lastw + 1 < j) {
+						void commit(void) {
+							/*
+								printf("word: %d %d ",lastw,j);
+								fwrite(diff+lastw,j-lastw,1,stdout);
+								fputc('\n',stdout);
+							*/
+							if(wchars > 0) {
+								++words;
+								wchars = 0;
+							}
+						}
+						if(lastw + 2 == j) {
+							// 1 letter
+							switch(l[lastw]) {
+							case 'a':
+							case 'A':
+							case 'i':
+							case 'I':
+							case 'u':
+							case 'U':
+							case 'y':
+							case 'Y':
+								break;
+							default:
+								commit();
+							};
+						} else {
+							commit();
+						}
+						lastw = j;
+					}
+				} else {
+					lastw = j;
+				}
+				if(l[j] == '\n')
+					break;
+			} else {
+				if(!inword) {
+					inword = 1;
+					lastw = j;
+				}
+			}
+			if(isalnum(l[j])) {
+				++wchars;
+			}
+			++characters;
+		}			
 		return 0;
 	}
 
@@ -186,11 +239,12 @@ void check_path(CC ctx, char* path, u16 len) {
 							float progress,
 							void *payload) {
 		printf("Um %.2lf%%\n",progress * 100);
+		return 0;
 	}
 	
 
-	repo_check(git_diff_foreach(diff, on_file, NULL, on_hunk, NULL, NULL));
-	abort();
+	repo_check(git_diff_foreach(diff, on_file, NULL, NULL, on_line, NULL));
+	git_diff_free(diff);
 	maybe_commit(ctx, path, lines, words, characters);
 }
 

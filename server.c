@@ -14,9 +14,17 @@ void on_connect(uv_stream_t* server, int status) {
 
 int main(int argc, char *argv[])
 {
-	assert(argc == 2); // argv[1] is the socket name sorta (\1 to avoid early arg end)
-	char* name = argv[1];
-	name[0] = '\0';
+	repo_init();
+	
+	char* name;
+	if(argc == 2) {
+		name = argv[1];
+		name[0] = '\0';
+	} else {
+		name = alloca(PATH_MAX+2);
+		realpath(".",name+1);
+		name[0] = '\0';
+	}
 
 	// 1 = stdout
 	// 2 = message log
@@ -26,7 +34,6 @@ int main(int argc, char *argv[])
 	
 	check_init();
 	activity_init();
-	repo_init();
 	
 	uv_pipe_t server;
 	uv_pipe_init(uv_default_loop(), &server, 1);
