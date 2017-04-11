@@ -1,4 +1,7 @@
+#define _XOPEN_SOURCE_EXTENDED
 #include <uv.h>
+
+
 #include <stdlib.h> // exit
 #include <stdint.h>
 #include <assert.h>
@@ -9,7 +12,7 @@
 #include <stdarg.h> // va_*
 #include <fcntl.h> // open*
 #include <pwd.h> // getpw*
-
+#include <sys/stat.h> // mkdir, O_PATH
 
 
 int open_home(void) {

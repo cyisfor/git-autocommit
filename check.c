@@ -1,6 +1,8 @@
 #include "check.h"
 #include "activity.h"
 
+#include "repo.h"
+
 #include <assert.h>
 #include <stdlib.h> // malloc
 #include <string.h> // memcpy
