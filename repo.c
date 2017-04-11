@@ -6,7 +6,6 @@
 #include <stdio.h> // 
 #include <errno.h> // 
 
-
 git_repository* repo = NULL;
 void repo_init(void) {
 	// test for root ugh
@@ -21,7 +20,7 @@ void repo_init(void) {
 		if(getcwd(derpd,2)) {
 			if(errno == ERANGE) continue;
 			if(derpd[0] == '/' && derpd[1] == '\0') {
-				fprintf(stderr,"AC: couldn't find a git repository");
+				fprintf(stderr,"AC: couldn't find a git repository\n");
 				exit(1);
 			}
 		}

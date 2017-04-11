@@ -2,10 +2,8 @@
 #include <uv.h>
 
 #include <stdlib.h> // exit
-#include <stdint.h>
 #include <assert.h>
 #include <string.h> // strlen
-#include <unistd.h> // fork, execv
 #include <stdbool.h> 
 #include <sys/wait.h> // waitpid
 #include <stdarg.h> // va_*
@@ -26,10 +24,10 @@ int open_home(void) {
 
 void move_to(int loc, ...) {
 	va_list a;
-	va_start(loc,a);
+	va_start(a,loc);
 	int cur = loc;
 	for(;;) {
-		const char* name = va_next(a,const char*);
+		const char* name = va_arg(a,const char*);
 		if(name == NULL) break;
 		mkdirat(cur,name,0755);
 		int new = openat(cur,name,O_PATH);
@@ -81,30 +79,11 @@ int main(int argc, char *argv[])
 	// the name of the socket is \0 plus the git top directory
 	char name[PATH_MAX+2] = "\0";
 
-	int io[2];
-	pipe(io);
-	int pid = fork();
-	if(pid == 0) {
-		close(io[0]);
-		dup2(io[1],1);
-		close(io[1]);
-		execlp("git",
-					 "git","rev-parse", "--show-toplevel",NULL);
+	if(0 != repo_init()) {
+		bye("couldn't find a git repository");
 	}
-	close(io[1]);
-	ssize_t amt = read(io[0],name+1,PATH_MAX);
-
-	close(io[0]);
-	int status;
-	assert(pid == waitpid(pid,&status,0));
-	if(!(WIFEXITED(status) && 0 == WEXITSTATUS(status))) {
-		// not in a git repository
-		bye("%s no git repository",path);
-		exit(status);
-	}
-	// amt + 1 is always a newline
-	name[amt] = '\0';
-	chdir(name+1);
+	// repo_init chdirs to the git top directory
+	realpath(".",name+1);
 	//printf("Found git dir '%s'\n",name+1);
 	
 	uv_pipe_t conn;
