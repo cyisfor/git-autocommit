@@ -138,6 +138,7 @@ static git_commit* get_head(void) {
 void check_path(CC ctx, char* path, u16 len) {
 	git_index* idx;
 	repo_check(git_repository_index(&idx, repo));
+	git_index_read(idx, 1);
 	repo_check(git_index_add_bypath(idx, path));
 	git_index_write(idx);
 	git_index_free(idx);
@@ -281,7 +282,6 @@ static void commit_now(CC ctx, char* path, i32 lines, i32 words, i32 characters)
 	write(3, message,amt); // stdout fileno in a weird place to stop unexpected output
 	write(3, " ",1);
 
-	
 	git_oid treeoid;
 	repo_check(git_index_write_tree(&treeoid, idx));
 	git_tree* tree = NULL;
