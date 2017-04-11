@@ -76,7 +76,6 @@ static void on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
 		return;
 	}
 	ctx->read += nread;
-	activity_poke();
 
 	// now read all the paths we see.
 	for(;;) {
@@ -111,110 +110,66 @@ void check_accept(uv_stream_t* server) {
 	uv_tcp_init(uv_default_loop(), &ctx->stream);
 	uv_accept(server, (uv_stream_t*) &ctx->stream);
 	uv_read_start((uv_stream_t*)ctx, alloc_cb, on_read);
+	activity_poke();
 }
 
 static void maybe_commit(CC ctx, char* path, i32 lines, i32 words, i32 characters);
 
 static void check_path(CC ctx, char* path, u16 len) {
-	int pid = fork();
-	if(pid == 0) {
-		//printf("adding %s\n",path);
-		execl("git","add",path,NULL);
-	}
-	waitfor(pid);
+	git_index* idx;
+	repo_check(git_repository_index(&idx, repo));
+	repo_check(git_index_add_bypath(idx, path));
+	git_index_free(idx);
 
-	char template[] = "derpXXXXXX";
-	int io = mkstemp(template);
-	unlink(template);
-	pid = fork();
-	if(pid == 0) {
-		dup2(io,1);
-		close(io);
-		execlp("git","git","diff","HEAD","--word-diff=porcelain",NULL);
-	}
-	waitfor(pid);
-	struct stat st;
-	assert(0==fstat(io,&st));
-	if(st.st_size == 0)
-		return;
-	char* diff = mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, io, 0);
-	assert(diff != MAP_FAILED);
+	git_diff* diff = NULL;
+	git_tree* head = NULL;
+	git_reference* ref = NULL;
+	repo_check(git_repository_head(&ref, repo));
+	const git_oid *oid = git_reference_target(ref);
+	assert(oid != NULL);
+
+	repo_check(git_tree_lookup(&old_tree, repo, oid));
+	git_reference_free(ref);
+
+	git_diff_options options = GIT_DIFF_OPTIONS_INIT;
+	options.context_lines = 0;
+	options.flags =
+		GIT_DIFF_IGNORE_SUBMODULES |
+		GIT_DIFF_SKIP_BINARY_CHECK |
+		GIT_DIFF_IGNORE_WHITESPACE;
+	
+	repo_check(git_diff_tree_to_workdir_with_index(
+							 &diff,
+							 repo,
+							 old_tree,
+							 options));
+	git_tree_free(old_tree);
 
 	i32 characters = 0;
 	i32 words = 0;
 	i32 lines = 0;
-	size_t i = 0;
-	char found_diff = 0;
-	for(;i<st.st_size;++i) {
-		if(i < st.st_size - 2 &&
-			 (i == 0 || diff[i] == '\n')) {
-			if (i < st.st_size - 3 &&
-					((diff[i+1] == '-' && diff[i+2] != '-') ||
-					 (diff[i+1] == '+' && diff[i+2] != '+'))) {
-				found_diff = 1;
-				// we're at the newline before a -word or +word
-				size_t j = i+2;
-				char inword = 1;
-				size_t lastw = j;
-				for(;j<st.st_size;++j) {
-					//printf("C: %c %d %d %d\n",diff[j],inword,lastw,j);
-					if(isspace(diff[j])) {
-						if(inword) {
-							inword = 0;
-							if(lastw + 1 < j)  {
-								void commit(void) {
-									/*
-										printf("word: %d %d ",lastw,j);
-									fwrite(diff+lastw,j-lastw,1,stdout);
-									fputc('\n',stdout);
-									*/
-									++words;
-								}
-								if(lastw + 2 == j) {
-									// 1 letter
-									switch(diff[lastw]) {
-									case 'a':
-									case 'A':
-									case 'i':
-									case 'I':
-									case 'u':
-									case 'U':
-									case 'y':
-									case 'Y':
-										break;
-									default:
-										commit();
-									};
-								} else {
-									commit();
-								}
-								lastw = j;
-							}
-						} else {
-							lastw = j;
-						}
-						if(diff[j] == '\n')
-							break;
-					} else {
-						if(!inword) {
-							inword = 1;
-							lastw = j;
-						}
-					}
-					++characters;
-				}
-				i = j;
-			} else if(diff[i+1] == '~') {
-				// newlines in the source are represented by a \n~
-				if(found_diff) {
-					++lines;
-					found_diff = 0;
-				}
-			}
-		}
+
+
+	int on_hunk(const git_diff_delta *delta,
+							const git_diff_hunk *hunk,
+							void *payload) {
+		puts("uh hunk");
+		puts("------------------");
+		fwrite(hunk->header,hunk->header_len,1,stdout);
+		puts("\n------------------");
 	}
-DONE:
-	printf("words %lu %lu %lu\n",lines, words, characters);
+
+	int on_line(const git_diff_delta *delta, /**< delta that contains this data */
+							const git_diff_hunk *hunk,   /**< hunk containing this data */
+							const git_diff_line *line,   /**< line data */
+							void *payload) {
+		fputs("uh line",stdout);
+		fwrite(line->content,line->content_len,1,stdout);
+		putchar('\n');
+	}
+
+	repo_check(git_diff_foreach(diff, on_file, on_hunk, NULL, NULL, NULL));
+	abort();
 	maybe_commit(ctx, path, lines, words, characters);
 }
 

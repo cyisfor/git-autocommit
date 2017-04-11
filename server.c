@@ -1,5 +1,7 @@
 #include "activity.h"
 #include "check.h"
+#include "repo.h"
+
 #include <assert.h>
 #include <unistd.h> // getcwd
 
@@ -25,6 +27,7 @@ int main(int argc, char *argv[])
 	check_init();
 	activity_init();
 	repo_init();
+	
 	uv_pipe_t server;
 	uv_pipe_init(uv_default_loop(), &server, 1);
 	assert(getcwd(name+1,0x200-1));

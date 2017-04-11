@@ -1,9 +1,12 @@
 #define _GNU_SOURCE
+#include "repo.h"
+
 #include <uv.h>
 
 #include <stdlib.h> // exit
 #include <assert.h>
 #include <string.h> // strlen
+#include <unistd.h> // getuid, close, dup2, fork
 #include <stdbool.h> 
 #include <sys/wait.h> // waitpid
 #include <stdarg.h> // va_*
