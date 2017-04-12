@@ -1,6 +1,10 @@
 #define _GNU_SOURCE
 #include "repo.h"
 
+#include <git2/global.h>
+
+
+
 #include <unistd.h> // chdir
 #include <fcntl.h> // openat
 #include <assert.h> // 
@@ -13,6 +17,8 @@ const char repo_path[PATH_MAX];
 #endif
 
 int repo_init(void) {
+	git_libgit2_init();
+
 	// test for root ugh
 	char derpd[2];
 	int cwd = -1;

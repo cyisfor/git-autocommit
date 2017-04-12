@@ -11,8 +11,6 @@
 #include <git2/signature.h>
 #include <git2/status.h>
 
-
-
 #include <assert.h>
 #include <stdlib.h> // malloc
 #include <string.h> // memcpy
@@ -84,8 +82,11 @@ static void on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
 		u16 size = *((u16*)(ctx->buf + ctx->checked));
 		if(size == 0) {
 			// special message incoming
+			
+			// the message hasn't finished coming in yet, break
 			if(ctx->read < ctx->checked + 3) break;
-			switch(ctx->buf[ctx->checked+1]) {
+			
+			switch(ctx->buf[ctx->checked+2]) {
 			case 0:
 				exit(0);
 			};
@@ -114,6 +115,7 @@ void check_accept(uv_stream_t* server) {
 
 static void maybe_commit(CC ctx, char* path, i32 lines, i32 words, i32 characters);
 
+// don't cache the head, because other processes could commit to the repository while we're running!
 static git_commit* get_head(void) {
 	git_reference* master = NULL;
 	git_reference* derp = NULL;
@@ -121,7 +123,6 @@ static git_commit* get_head(void) {
 	repo_check(git_repository_head(&master, repo));
 	//printf("umm %s\n",git_reference_shorthand(master));
 	repo_check(git_reference_resolve(&derp, master));
-	git_reference_free(master);
 		
 	//printf("umm %s\n",git_reference_shorthand(derp));
 	const git_oid *oid = git_reference_target(derp);
@@ -131,7 +132,9 @@ static git_commit* get_head(void) {
 	//printf("OID %s\n",boop);
 
 	repo_check(git_commit_lookup(&head, repo, oid));
+
 	git_reference_free(derp);
+	git_reference_free(master);
 	return head;
 }
 
@@ -139,9 +142,12 @@ void check_path(CC ctx, char* path, u16 len) {
 	git_index* idx;
 	repo_check(git_repository_index(&idx, repo));
 	git_index_read(idx, 1);
-	// don't repo check b/c this fails if already added
-	git_index_add_bypath(idx, path);
-	git_index_write(idx);
+	// don't repo_check b/c this fails if already added
+	assert(idx);
+	assert(path);
+	if(0 == git_index_add_bypath(idx, path)) {
+		git_index_write(idx);
+	}
 	git_index_free(idx);
 
 	git_diff* diff = NULL;
@@ -324,13 +330,10 @@ struct commit_info {
 	i32 lines;
 	i32 words;
 	i32 characters;
-} ci;
+} ci = {};
 
 void check_init(void) {
 	uv_timer_init(uv_default_loop(), &ci.committer);
-	ci.next_commit = 0;
-	ci.path = NULL;
-	ci.words = ci.characters = 0;
 }
 
 static void commit_later(uv_timer_t* handle) {

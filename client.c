@@ -75,11 +75,16 @@ int main(int argc, char *argv[])
 		fputc('\n',message);
 	}
 
-	const char* path = getenv("file");
-	if(path == NULL) {
-		bye("no file provided");
+	bool quitting = (NULL != getenv("quit"));
+		
+	const char* path;
+	if(!quitting) {
+		path = getenv("file");
+		if(path == NULL) {
+			bye("no file provided");
+		}
+		if(path[0] == '.' && path[1] == '/') path += 2;
 	}
-
 	/* if we start out in a subdirectory of a repository, we don't want to run a
 		 second server instance of the same repository. Just chdir to the top level.
 	*/
@@ -104,7 +109,6 @@ int main(int argc, char *argv[])
 		exit(0);
 	}
 
-	bool quitting = (NULL != getenv("quit"));
 
 	int tries = 0;
 	uv_timer_t trying;

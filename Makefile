@@ -1,4 +1,4 @@
-OPT=-g
+OPT=-O2
 LDFLAGS+=$(OPT) -luv -lgit2
 CFLAGS+=$(OPT)
 all: index_reader testgit server client
