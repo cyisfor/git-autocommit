@@ -21,7 +21,7 @@ int repo_init(void) {
 
 	return git_repository_open_ext(&repo,
 																		".",
-																		GIT_REPOSITORY_OPEN_BARE,
+																		0,
 																		NULL);
 	return 0;
 }

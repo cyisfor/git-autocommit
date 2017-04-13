@@ -21,13 +21,15 @@ int main(int argc, char *argv[])
 	int sock;
 	bool unbound = getenv("bound")==NULL;
 	if(unbound) {
-		// we shall not be bound
 		net_set_addr();
 		sock = net_bind();
 		if(sock == -1) exit(1);
 	} else {
 		sock = 3;
+		// we shall not be bound
+		unbound = true;
 	}
+	
 
 	check_init();
 	activity_init();

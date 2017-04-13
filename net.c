@@ -35,7 +35,7 @@ int net_bind(void) {
 
 int net_connect(void) {
 	int sock = socket(AF_UNIX, SOCK_STREAM, 0);
-	if(0 == connect(sock,(struct sockaddr*)&addr,sizeof(addr))) {
+	if(0 != connect(sock,(struct sockaddr*)&addr,sizeof(addr))) {
 		if(errno == ECONNREFUSED)
 			return -1;
 		error(errno,errno,"connect failed");
