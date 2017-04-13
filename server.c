@@ -9,8 +9,6 @@
 #include <sys/un.h>
 #include <stdbool.h>
 
-
-
 #include <error.h>
 #include <errno.h> 
 
