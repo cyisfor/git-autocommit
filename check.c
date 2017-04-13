@@ -278,7 +278,7 @@ static void commit_now(CC ctx, char* path, i32 lines, i32 words, i32 characters)
 	
 	if(0 == changes) {
 		#define LITLEN(s) s, (sizeof(s)-1)
-		write(3,LITLEN("AC: no empty commits please.\n"));
+		write(1,LITLEN("AC: no empty commits please.\n"));
 		// no empty commits, please
 		return;
 	}
@@ -288,9 +288,9 @@ static void commit_now(CC ctx, char* path, i32 lines, i32 words, i32 characters)
 	char message[0x1000];
 	ssize_t amt = snprintf(message,0x1000,"auto (%s) %lu %lu %lu",
 												 path, lines, words, characters);
-	write(3, "AC: ",4);
-	write(3, message,amt); // stdout fileno in a weird place to stop unexpected output
-	write(3, " ",1);
+	write(1, "AC: ",4);
+	write(1, message,amt); // stdout fileno in a weird place to stop unexpected output
+	write(1, " ",1);
 
 	git_oid treeoid;
 	repo_check(git_index_write_tree(&treeoid, idx));
@@ -319,8 +319,8 @@ static void commit_now(CC ctx, char* path, i32 lines, i32 words, i32 characters)
 	
 	char oid_hex[GIT_OID_HEXSZ+1] = { 0 };
 	git_oid_fmt(oid_hex, &new_commit);
-	write(3,oid_hex,GIT_OID_HEXSZ);
-	write(3,"\n",1);
+	write(1,oid_hex,GIT_OID_HEXSZ);
+	write(1,"\n",1);
 
 	git_commit_free(head);
 	git_tree_free(tree);
@@ -413,7 +413,7 @@ static void maybe_commit(CC ctx, char* path, i32 lines, i32 words, i32 character
 		if(ci.next_commit == 0 || now + d < ci.next_commit) {
 			// keep pushing the timer back, so we commit sooner if more changes
 			char buf[0x200];
-			write(3,buf,snprintf(buf,0x200,"AC: %s waiting %.2f\n",path,d)); // weird stdout fd
+			write(1,buf,snprintf(buf,0x200,"AC: %s waiting %.2f\n",path,d)); // weird stdout fd
 
 			uv_timer_stop(&ci.committer);
 			ci.next_commit = now + d;
