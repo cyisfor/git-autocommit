@@ -1,20 +1,15 @@
 #include "repo.h"
 #include <git2/index.h>
-#include <git2/tree.h> // 
-
+#include <git2/tree.h>
 
 #include <assert.h>
-#include <stdio.h> 
+#include <stdio.h>
 #include <sys/stat.h>
-
-
-
-
 
 
 int main(int argc, char *argv[])
 {
-	
+
 	repo_init();
 	git_index* idx;
 	repo_check(git_repository_index(&idx, repo));
@@ -29,7 +24,7 @@ int main(int argc, char *argv[])
 		const git_index_entry * e = git_index_get_byindex(idx,i);
 		printf("%s %x %x %x\n",e->path,e->flags,e->mtime.seconds,GIT_IDXENTRY_STAGE(e),
 			git_index_entry_stage(e));
-	
+
 		if(0==stat(e->path,&buf)) {
 			printf("* on disk: %x\n",buf.st_mtime);
 		}
