@@ -22,7 +22,6 @@
 #include <ctype.h> // isspace
 #include <stdbool.h>
 
-
 typedef int32_t i32;
 
 struct check_context {
@@ -153,8 +152,26 @@ void check_path(CC ctx, char* path, u16 len) {
 	// don't repo_check b/c this fails if already added
 	assert(idx);
 	assert(path);
+
+	/* git throws a hissy fit if it's not a relative path to the git dir,
+		 even if the absolute path is in there.
+	*/
+	char bigpath[PATH_MAX];
+	assert(NULL != realpath(path,bigpath));
+	const char *workdir = git_repository_workdir(repo);
+	size_t wlen = strlen(workdir);
+	assert(workdir != NULL); // we can't run an editor on a bare repository!
+	if(0 == strncmp(bigpath,workdir,wlen)) {
+		// it is a good path, yey
+		// this'll relativize it
+		path = bigpath + wlen;
+	}
+	
 	if(0 == git_index_add_bypath(idx, path)) {
+		printf("added path %s\n",path);
 		git_index_write(idx);
+	} else {
+		printf("error adding path %s\n",path);
 	}
 	git_index_free(idx);
 
