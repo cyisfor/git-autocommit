@@ -156,7 +156,6 @@ void check_path(CC ctx, char* path, u16 len) {
 	/* git throws a hissy fit if it's not a relative path to the git dir,
 		 even if the absolute path is in there.
 	*/
-	char* derpath = path;
 	char bigpath[PATH_MAX];
 	assert(NULL != realpath(path,bigpath));
 	const char *workdir = git_repository_workdir(repo);
@@ -165,10 +164,11 @@ void check_path(CC ctx, char* path, u16 len) {
 	if(0 == strncmp(bigpath,workdir,wlen)) {
 		// it is a good path, yey
 		// this'll relativize it
-		derpath = bigpath + wlen;
+		free(path);
+		path = strdup(bigpath + wlen); // I love memory management
 	}
 	
-	if(0 == git_index_add_bypath(idx, derpath)) {
+	if(0 == git_index_add_bypath(idx, path)) {
 		printf("added path %s\n",path);
 		git_index_write(idx);
 	} else {
