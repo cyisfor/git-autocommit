@@ -47,13 +47,14 @@ void move_to(int loc, ...) {
 
 typedef uint16_t u16;
 
-int main(int argc, char *argv[])
-{
-	// first arg = name of file that was saved
-
+FILE* setuplog(void) {
+	if(getenv("ferrets") != NULL) {
+		return stdout;
+	}
+			
 	int logloc = open_home();
 	move_to(logloc, ".local", "logs", NULL);
-	
+
 	int log = openat(logloc,"autocommit.log", O_WRONLY|O_CREAT|O_APPEND, 0644);
 	assert(log >= 0);
 	dup2(1,logloc); // logloc isn't in use anymore
@@ -61,7 +62,15 @@ int main(int argc, char *argv[])
 	dup2(log,2);
 	close(log);
 	log = logloc; // HAX
-	FILE* message = fdopen(log,"wt");
+	return fdopen(log,"wt");
+}
+
+int main(int argc, char *argv[])
+{
+	// first arg = name of file that was saved
+
+
+	FILE* message = setuplog();
 
 	// now everything written to "message" goes to stdout (emacs)
 	// while stdout/err goes to a log
