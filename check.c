@@ -104,12 +104,17 @@ static void on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
 }
 
 void check_accept(uv_stream_t* server) {
-	uv_tcp_t stream;
-	uv_tcp_init(uv_default_loop(), &stream);
-	if(uv_accept(server, (uv_stream_t*) &stream) == EAGAIN)
-		return;
 	CC ctx = (CC) malloc(sizeof(struct check_context));
-	memcpy(&ctx->stream,&stream,sizeof(stream));
+	uv_tcp_init(uv_default_loop(), &ctx->stream);
+	int res = uv_accept(server, (uv_stream_t*) &ctx->stream);
+	if(res == UV_EAGAIN) {
+		free(ctx);
+		puts("ugh");
+		return;
+	}
+	if(res != 0) {
+		error(-res,-res,"um");
+	}
 	ctx->buf = NULL;
 	ctx->space = ctx->read = ctx->checked = 0;
 	uv_read_start((uv_stream_t*)ctx, alloc_cb, on_read);
