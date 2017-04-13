@@ -29,7 +29,6 @@ int main(int argc, char *argv[])
 		// we shall not be bound
 		unbound = true;
 	}
-	
 
 	check_init();
 	activity_init();
