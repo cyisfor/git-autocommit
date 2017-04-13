@@ -1,5 +1,6 @@
 #define _GNU_SOURCE
 #include "repo.h"
+#include "net.h"
 
 #include <uv.h>
 
@@ -17,8 +18,6 @@
 #include <pwd.h> // getpw*
 #include <sys/stat.h> // mkdir
 #include <error.h> // 
-
-
 
 int open_home(void) {
 	const char* path = getenv("HOME");
@@ -73,6 +72,7 @@ int main(int argc, char *argv[])
 		vfprintf(message, fmt, args);
 		va_end(args);
 		fputc('\n',message);
+		exit(23);
 	}
 
 	bool quitting = (NULL != getenv("quit"));
@@ -89,17 +89,15 @@ int main(int argc, char *argv[])
 		 second server instance of the same repository. Just chdir to the top level.
 	*/
 
-	// the name of the socket is \0 plus the git top directory
-	struct sockaddr_un addr = {
-	sun_family: AF_UNIX,
-	};
-
 	if(0 != repo_init()) {
 		bye("couldn't find a git repository");
 	}
-	// repo_init chdirs to the git top directory
-	getcwd(addr.sun_path+1, 107);
-	//printf("Found git dir '%s'\n",name+1);
+	net_set_addr();
+
+	/* the strategy is... continue trying to connect to addr
+		 if ECONNREFUSED, try binding
+		 if bound, listen, fork and hand over the socket, then go back to connecting
+	*/
 	
 	uv_pipe_t conn;
 	uv_write_t writing;
@@ -109,41 +107,11 @@ int main(int argc, char *argv[])
 		exit(0);
 	}
 
-
 	int tries = 0;
 	uv_timer_t trying;
 	uv_timer_init(uv_default_loop(),&trying);
 
-	void on_connect(uv_connect_t* req, int status) {
-		if(status != 0) {
-			if(quitting) exit(0);
-			if(++tries != 3) return;
-			error(0,status,"ugh");
-			// start the server
-			int pid = fork();
-			if(pid == 0) {
-				setsid();
-				// emacs tries to trap you by opening a secret unused pipe
-				int i;
-				for(i=log+1;i < log+3; ++i) {
-					close(i);
-				}
-				// don't bother saving log... emacs ignores stdout after process is gone
-				// dup2(log,1);
-				
-				// ...client -> ...server
-				size_t len = strlen(argv[0]);
-				argv[0][len-6] = 's';
-				argv[0][len-5] = 'e';
-				argv[0][len-4] = 'r';
-				argv[0][len-3] = 'v';
-				argv[0][len-2] = 'e';
-				argv[0][len-1] = 'r';
-				execl(argv[0],argv[0],addr.sun_path+1,NULL);
-			}
-			fprintf(message,"AC: starting server %d\n",pid);
-			return;
-		}
+	void on_connect(void) {
 		tries = 0;
 		uv_timer_stop(&trying);
 
@@ -162,19 +130,71 @@ int main(int argc, char *argv[])
 		uv_write(&writing, (uv_stream_t*) &conn, &dest, 1, cleanup);
 	}
 
-	uv_connect_t derp;
-	void try_connect() {
+	void try_connect(void) {
 		// uv_pipe_connect fails on abstract sockets
 		// https://github.com/joyent/libuv/issues/1486
-		int sock = socket(AF_UNIX, SOCK_STREAM, 0);
-		if(0 == connect(sock,(struct sockaddr*)&addr,sizeof(addr))) {
-			assert(0==uv_pipe_open(&conn, sock));
-			on_connect(&derp, 0);
+		int sock = net_connect();
+		if(sock == -1) {
+			if(++tries != 3) return;
+
+			if(quitting) exit(0);
+			
+			// try to bind
+			int sock = net_bind();
+			if(sock <= 0) return; // already bound, hopefully
+			
+			// we got it. start the server
+			int pid = fork();
+			if(pid == 0) {
+				setsid();
+
+				// don't bother saving stdout... emacs ignores stdout after process is gone
+				// dup2(log,1);
+				// make sure the socket is on fd 3
+				// we could snprintf(somebuf,0x10,"%d",sock) for the execve, then atoi, but dup2 is cheaper
+				if(sock == 3) {
+					fcntl(sock,F_SETFL,FD_CLOEXEC | fcntl(sock,F_GETFL));
+				} else {
+					dup2(sock,3); // note: dup2 clears FD_CLOEXEC
+					close(sock);
+				}
+
+				// emacs tries to trap you by opening a secret unused pipe
+				int i;
+				for(i=sock+1;i < sock+10; ++i) {
+					close(i);
+				}
+				close(0);
+
+				/* now
+					 0 => nothing
+					 1 => log
+					 2 => log
+					 3 => bound, listening socket
+					 4+ => nothing
+				*/
+
+				setenv("bound","1",1);
+				
+				// ...client -> ...server
+				size_t len = strlen(argv[0]);
+				argv[0][len-6] = 's';
+				argv[0][len-5] = 'e';
+				argv[0][len-4] = 'r';
+				argv[0][len-3] = 'v';
+				argv[0][len-2] = 'e';
+				argv[0][len-1] = 'r';
+				execl(argv[0],argv[0],NULL);
+			}
+			fprintf(message,"AC: starting server %d\n",pid);
+			close(sock); // XXX: could we finagle this socket into a connected one without closing it?
+			try_connect(); // we should be able to connect right away since listen() already called
 		} else {
-			on_connect(&derp, errno);
+			assert(0==uv_pipe_open(&conn, sock));
+			on_connect();
 		}
 	}
-	uv_timer_start(&trying, try_connect, 0, 200);
+	uv_timer_start(&trying, (void*)try_connect, 0, 200);
 	uv_run(uv_default_loop(), UV_RUN_DEFAULT);
 	return 0;
 }

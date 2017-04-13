@@ -2,8 +2,8 @@ OPT=-O2
 LDFLAGS+=$(OPT) -luv -lgit2
 CFLAGS+=$(OPT)
 all: index_reader testgit server client
-server: check.o server.o activity.o repo.o
-client: client.o repo.o
+server: check.o server.o activity.o repo.o net.o
+client: client.o repo.o net.o
 clean:
 	git clean -fdx
 

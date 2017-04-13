@@ -19,32 +19,10 @@ const char repo_path[PATH_MAX];
 int repo_init(void) {
 	git_libgit2_init();
 
-	// test for root ugh
-	char derpd[2];
-	int cwd = -1;
-	for(;;) {
-		if(0 == git_repository_open(&repo,".")) break;
-		if(cwd == -1) {
-			cwd = open(".",O_PATH|O_DIRECTORY);
-			assert(cwd >= 0);
-		}
-		if(getcwd(derpd,2)) {
-			if(errno == ERANGE) continue;
-			if(derpd[0] == '/' && derpd[1] == '\0') {
-				return 1;
-			}
-		}
-		// go up until we find one
-		assert(0 == chdir(".."));
-	}
-	assert(repo != NULL);
-#ifdef RETURN_STUPIDLY
-	assert(NULL != realpath(".",repo_path));
-	if(cwd != -1) {
-		fchdir(cwd);
-		close(cwd);
-	}
-#endif
+	return git_repository_open_ext(&repo,
+																		".",
+																		GIT_REPOSITORY_OPEN_BARE,
+																		NULL);
 	return 0;
 }
 
