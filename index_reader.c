@@ -1,6 +1,8 @@
 #include "repo.h"
 #include <git2/index.h>
 #include <git2/tree.h>
+#include <git2/diff.h> 
+
 
 #include <assert.h>
 #include <stdio.h>
@@ -13,6 +15,22 @@ int main(int argc, char *argv[])
 	repo_init();
 	git_index* idx;
 	repo_check(git_repository_index(&idx, repo));
+
+	git_diff* diff = NULL;
+	git_diff_options opts = GIT_DIFF_OPTIONS_INIT;
+	repo_check(git_diff_index_to_workdir(&diff,repo,idx,&opts));
+
+	
+	int on_file(const git_diff_delta *delta,
+							float progress,
+							void *payload) {
+		printf("diff %c %s\n",git_diff_status_char(delta->status),
+					 delta->old_file.path);
+	}
+	
+
+	git_diff_foreach(diff, on_file,NULL,NULL,NULL,NULL);
+	
 	struct stat buf;
 	time_t imtime = 0;
 	if(0==stat(".git/index",&buf)) {
