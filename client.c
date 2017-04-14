@@ -86,21 +86,29 @@ int main(int argc, char *argv[])
 
 	bool quitting = (NULL != getenv("quit"));
 		
-	const char* path;
+	char* path;
+	size_t plen;
 	if(!quitting) {
 		path = getenv("file");
 		if(path == NULL) {
 			bye("no file provided");
 		}
 		if(path[0] == '.' && path[1] == '/') path += 2;
+		plen = strlen(path);
+	} else {
+		path = ".";
+		plen = 1;
 	}
-	/* if we start out in a subdirectory of a repository, we don't want to run a
-		 second server instance of the same repository. Just chdir to the top level.
-	*/
 
-	if(0 != repo_init()) {
+	if(0 != repo_discover_init(path,plen)) {
 		bye("couldn't find a git repository");
 	}
+
+	if(!quitting) {
+		// hissy fit......
+		plen = repo_relative(&path, plen);
+	}
+	
 	net_set_addr();
 
 	/* the strategy is... continue trying to connect to addr
@@ -131,7 +139,7 @@ int main(int argc, char *argv[])
 			*((u16*)dest.base) = 0;
 			dest.base[2] = 0;
 		} else {
-			dest.len = strlen(path)+2;
+			dest.len = plen+2;
 			dest.base = alloca(dest.len);
 			*((u16*)dest.base) = dest.len - 2;
 			memcpy(dest.base + 2, path, dest.len - 2);
@@ -193,7 +201,7 @@ int main(int argc, char *argv[])
 				argv[0][len-3] = 'v';
 				argv[0][len-2] = 'e';
 				argv[0][len-1] = 'r';
-				execl(argv[0],argv[0],NULL);
+				execl(argv[0],argv[0],git_repository_path(repo),NULL);
 			}
 			fprintf(message,"AC: starting server %d\n",pid);
 			close(sock); // XXX: could we finagle this socket into a connected one without closing it?
