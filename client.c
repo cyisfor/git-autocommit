@@ -87,13 +87,15 @@ int main(int argc, char *argv[])
 	bool quitting = (NULL != getenv("quit"));
 		
 	char* path;
+	char bigpath[PATH_MAX];
 	size_t plen;
 	if(!quitting) {
 		path = getenv("file");
 		if(path == NULL) {
 			bye("no file provided");
 		}
-		if(path[0] == '.' && path[1] == '/') path += 2;
+		assert(NULL!=realpath(path,bigpath));
+		path = bigpath;
 		plen = strlen(path);
 	} else {
 		path = ".";

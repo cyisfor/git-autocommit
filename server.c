@@ -15,7 +15,7 @@
 int main(int argc, char *argv[])
 {
 	if(argc == 1) {
-		assert(0 == repo_discover_init(".",1)):
+		assert(0 == repo_discover_init(".",1));
 	} else {
 		assert(0 == repo_init(argv[1]));
 	}
