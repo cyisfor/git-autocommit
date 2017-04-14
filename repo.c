@@ -16,6 +16,32 @@ git_repository* repo = NULL;
 const char repo_path[PATH_MAX];
 #endif
 
+/* ugh, this is messy... so we have a file like a/b/c/d.txt and a repo in a/b/.git/
+	 except our current directory is a/
+	 so we call file=./b/c/d.txt ./client and it doesn't know wtf to do with ./b/c/d.txt
+
+./b/c/d.txt is not a dir, so
+=>
+./b/c\0d.txt
+(if there are no slashes in it, just go to ".")
+
+now pass ./b/c to git_repository_open_ext
+(we can't just git_repository_discover, since we need the workdir)
+now restore ./b/c/d.txt, but only if there were slashes, otherwise we're restoring uninitialized memory
+
+then (maybe) fork the server
+
+then later get the workdir /a/b/
+then absolutize ./b/c/d.txt
+=>
+/a/b/c/d.txt
+then remove the /a/b/ prefix
+=>
+c/d.txt
+send c/d.txt to the server
+
+*/
+
 int repo_discover_init(char* start, int len) {
 	/* find a git repository that the file start is contained in.	*/
 	struct stat st;
