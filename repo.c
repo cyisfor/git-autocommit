@@ -25,14 +25,18 @@ int repo_discover_init(char* start, int len) {
 	if(!S_ISDIR(st.st_mode)) {
 		end = start + len - 1;
 		assert(end != start);
-		for(;;) {
-			if(*end == '/') break;
+		while(end > start) {
+			if(*end == '/') {
+				save = *end;
+				*end = '\0';
+				break;
+			}
 			--end;
-			assert(end != start);
 		}
-
-		save = *end;
-		*end = '\0';
+		if(end == start) {
+			start = ".";
+			end = NULL;
+		}
 	}
 	git_libgit2_init();
 	int res = git_repository_open_ext(&repo,
@@ -54,8 +58,8 @@ size_t repo_relative(char** path, size_t plen) {
 	assert(workdir != NULL); // we can't run an editor on a bare repository!
 	size_t len = strlen(workdir);
 	assert(len < plen);
-	*path = *path + len + 1;
-	return plen - len - 1;
+	*path = *path + len;
+	return plen - len;
 }
 
 void repo_check(git_error_code e) {
