@@ -14,7 +14,11 @@
 
 int main(int argc, char *argv[])
 {
-	assert(0 == repo_init());
+	if(argc == 1) {
+		assert(0 == repo_discover_init(".",1)):
+	} else {
+		assert(0 == repo_init(argv[1]));
+	}
 
 	int sock;
 	bool unbound = getenv("bound")==NULL;
