@@ -9,9 +9,7 @@
 #include <stdio.h>
 #include <errno.h>
 #include <sys/stat.h>
-
-
-
+#include <string.h> // strlen
 
 git_repository* repo = NULL;
 #ifdef RETURN_STUPIDLY
@@ -37,8 +35,7 @@ int repo_discover_init(char* start, int len) {
 		*end = '\0';
 	}
 	git_libgit2_init();
-	git_buf repodir;
-	int res = git_repository_open_ext(&repodir,
+	int res = git_repository_open_ext(&repo,
 																		start,
 																		0,
 																		NULL);
