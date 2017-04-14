@@ -12,7 +12,7 @@
 int main(int argc, char *argv[])
 {
 
-	repo_init();
+	repo_init(".");
 	git_index* idx;
 	repo_check(git_repository_index(&idx, repo));
 
