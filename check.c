@@ -88,6 +88,13 @@ static void on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
 			switch(ctx->buf[ctx->checked+2]) {
 			case 0:
 				exit(0);
+			case 1:
+				// get pid
+				{ pid_t pid = getpid();
+					uv_buf_t buf = { &pid, sizeof(pid) };
+					uv_write_t* req = malloc(sizeof(uv_write_t));
+					uv_write(req, stream, &buf, 1, free);
+				}
 			};
 			ctx->checked += 3; // size plus message
 			continue;

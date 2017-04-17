@@ -130,6 +130,11 @@ int main(int argc, char *argv[])
 	uv_timer_t trying;
 	uv_timer_init(uv_default_loop(),&trying);
 
+	void alloc_cb(uv_handle_t* handle, size_t size, uv_buf_t* ret) {
+		ret->base = malloc(size);
+		ret->len = size;
+	}
+
 	void get_info(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
 		assert(nread == sizeof(pid_t));
 		pid_t pid = *((pid_t*)buf->base);
