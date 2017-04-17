@@ -130,6 +130,13 @@ int main(int argc, char *argv[])
 	uv_timer_t trying;
 	uv_timer_init(uv_default_loop(),&trying);
 
+	void get_info(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
+		assert(nread == sizeof(pid_t));
+		pid_t pid = *((pid_t*)buf->base);
+		printf("Server PID: %ld\n",pid);
+		uv_read_stop(stream);
+	}
+
 	void on_connect(void) {
 		tries = 0;
 		uv_timer_stop(&trying);
@@ -140,6 +147,12 @@ int main(int argc, char *argv[])
 			dest.base = alloca(3);
 			*((u16*)dest.base) = 0;
 			dest.base[2] = 0;
+		} else if(checking) {
+			dest.len = 3;
+			dest.base = alloca(3);
+			*((u16*)dest.base) = 0;
+			dest.base[2] = 1;
+			uv_read_start((uv_stream_t*)&conn, alloc_cb, get_info);
 		} else {
 			dest.len = plen+2;
 			dest.base = alloca(dest.len);
