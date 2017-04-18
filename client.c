@@ -85,11 +85,12 @@ int main(int argc, char *argv[])
 	}
 
 	bool quitting = (NULL != getenv("quit"));
+	bool checking = (NULL != getenv("check"));
 		
 	char* path;
 	char bigpath[PATH_MAX];
 	size_t plen;
-	if(!quitting) {
+	if(!(quitting || checking)) {
 		path = getenv("file");
 		if(path == NULL) {
 			bye("no file provided");

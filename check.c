@@ -1,3 +1,4 @@
+#include "ops.h"
 #include "check.h"
 #include "activity.h"
 
@@ -86,14 +87,14 @@ static void on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
 			if(ctx->read < ctx->checked + 3) break;
 			
 			switch(ctx->buf[ctx->checked+2]) {
-			case 0:
+			case QUIT:
 				exit(0);
-			case 1:
+			case INFO:
 				// get pid
 				{ pid_t pid = getpid();
-					uv_buf_t buf = { &pid, sizeof(pid) };
+					uv_buf_t buf = { (char*)&pid, sizeof(pid) };
 					uv_write_t* req = malloc(sizeof(uv_write_t));
-					uv_write(req, stream, &buf, 1, free);
+					uv_write(req, stream, &buf, 1, (void*)free);
 				}
 			};
 			ctx->checked += 3; // size plus message
