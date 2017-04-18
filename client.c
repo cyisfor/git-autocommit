@@ -87,7 +87,7 @@ int main(int argc, char *argv[])
 
 	bool quitting = (NULL != getenv("quit"));
 	bool checking = (NULL != getenv("check"));
-	enum operations op = quitting ? QUIT : checking ? CHECK : ADD;
+	enum operations op = quitting ? QUIT : checking ? INFO : ADD;
 		
 	char* path;
 	char bigpath[PATH_MAX];
