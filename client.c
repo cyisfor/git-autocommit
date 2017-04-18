@@ -125,9 +125,6 @@ int main(int argc, char *argv[])
 	uv_write_t writing;
 	uv_pipe_init(uv_default_loop(), &conn, 1);
 
-	void cleanup(uv_write_t* req, int status) {
-		exit(0);
-	}
 
 	int tries = 0;
 	uv_timer_t trying;
@@ -145,6 +142,14 @@ int main(int argc, char *argv[])
 		uv_read_stop(stream);
 	}
 
+	void cleanup(uv_write_t* req, int status) {
+		if(op == INFO) {
+			uv_read_start((uv_stream_t*)&conn, alloc_cb, get_info);
+		} else {
+			exit(0);
+		}
+	}
+	
 	void on_connect(void) {
 		tries = 0;
 		uv_timer_stop(&trying);
@@ -162,9 +167,6 @@ int main(int argc, char *argv[])
 			dest.base = alloca(3);
 			*((u16*)dest.base) = 0;
 			dest.base[2] = op;
-			if(op == INFO) {
-				uv_read_start((uv_stream_t*)&conn, alloc_cb, get_info);
-			}
 		}
 		uv_write(&writing, (uv_stream_t*) &conn, &dest, 1, cleanup);
 	}
