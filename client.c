@@ -1,4 +1,5 @@
 #define _GNU_SOURCE
+#include "ops.h"
 #include "repo.h"
 #include "net.h"
 
@@ -86,11 +87,12 @@ int main(int argc, char *argv[])
 
 	bool quitting = (NULL != getenv("quit"));
 	bool checking = (NULL != getenv("check"));
+	enum operations op = quitting ? QUIT : checking ? CHECK : ADD;
 		
 	char* path;
 	char bigpath[PATH_MAX];
 	size_t plen;
-	if(!(quitting || checking)) {
+	if(op == ADD) {
 		path = getenv("file");
 		if(path == NULL) {
 			bye("no file provided");
@@ -107,7 +109,7 @@ int main(int argc, char *argv[])
 		bye("couldn't find a git repository");
 	}
 
-	if(!quitting) {
+	if(op == ADD) {
 		// hissy fit......
 		plen = repo_relative(&path, plen);
 	}
@@ -148,22 +150,18 @@ int main(int argc, char *argv[])
 		uv_timer_stop(&trying);
 
 		uv_buf_t dest;
-		if(quitting) {
-			dest.len = 3;
-			dest.base = alloca(3);
-			*((u16*)dest.base) = 0;
-			dest.base[2] = 0;
-		} else if(checking) {
-			dest.len = 3;
-			dest.base = alloca(3);
-			*((u16*)dest.base) = 0;
-			dest.base[2] = 1;
-			uv_read_start((uv_stream_t*)&conn, alloc_cb, get_info);
-		} else {
+		if(op == ADD) {
 			dest.len = plen+2;
 			dest.base = alloca(dest.len);
 			*((u16*)dest.base) = dest.len - 2;
 			memcpy(dest.base + 2, path, dest.len - 2);
+		} else {
+			// operations besides ADD are rare, so save a 1 byte op for ADD,
+			// add a 2-byte 0-size for "not ADD"
+			dest.len = 3;
+			dest.base = alloca(3);
+			*((u16*)dest.base) = 0;
+			dest.base[2] = op;
 		}
 		uv_write(&writing, (uv_stream_t*) &conn, &dest, 1, cleanup);
 	}
