@@ -162,6 +162,9 @@ int main(int argc, char *argv[])
 			dest.base = alloca(3);
 			*((u16*)dest.base) = 0;
 			dest.base[2] = op;
+			if(op == INFO) {
+				uv_read_start((uv_stream_t*)&conn, alloc_cb, get_info);
+			}
 		}
 		uv_write(&writing, (uv_stream_t*) &conn, &dest, 1, cleanup);
 	}

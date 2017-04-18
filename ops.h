@@ -1,1 +1,1 @@
-enum operations { ADD, QUIT, INFO};
+enum operations { ADD, QUIT, INFO };
