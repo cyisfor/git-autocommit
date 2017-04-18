@@ -111,7 +111,9 @@ int main(int argc, char *argv[])
 
 	if(op == ADD) {
 		// hissy fit......
+		printf("path %s\n",path);
 		plen = repo_relative(&path, plen);
+		printf("repo relative path %s\n",path);
 	}
 	
 	net_set_addr();
@@ -138,7 +140,7 @@ int main(int argc, char *argv[])
 	void get_info(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
 		assert(nread == sizeof(pid_t));
 		pid_t pid = *((pid_t*)buf->base);
-		printf("Server PID: %ld\n",pid);
+		fprintf(message, "Server PID: %ld\n",pid);
 		uv_read_stop(stream);
 	}
 
