@@ -29,8 +29,6 @@ int main(int argc, char *argv[])
 	} else {
 		sock = 3;
 		printf("UMMMMM: %ld %ld\n",getpid(), net_pid(sock));
-
-
 		// we shall not be bound
 		unbound = true;
 	}
