@@ -165,7 +165,7 @@ int main(int argc, char *argv[])
 				return;
 			}
 			pid_t pid = *((pid_t*)buf->base);
-			sleep(1);
+
 			fprintf(message, "Server PID: %ld %ld\n",pid, net_pid(sock));
 			uv_read_stop(stream);
 		} else {
