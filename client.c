@@ -271,7 +271,7 @@ int main(int argc, char *argv[])
 				execl(argv[0],argv[0],git_repository_path(repo),NULL);
 			}
 			fprintf(message,"AC: starting server %d\n",pid);
-			close(sock); // XXX: could we finagle this socket into a connected one without closing it?
+			//close(sock); // XXX: could we finagle this socket into a connected one without closing it?
 			try_connect(); // we should be able to connect right away since listen() already called
 		} else {
 			assert(0==uv_pipe_open(&conn, sock));
