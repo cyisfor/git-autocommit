@@ -1,3 +1,4 @@
+#define _GNU_SOURCE
 #include "net.h"
 #include "repo.h"
 #include "min.h"
@@ -7,6 +8,9 @@
 #include <fcntl.h>
 #include <error.h>
 #include <errno.h>
+#include <stdbool.h>
+#include <assert.h>
+
 
 // the name of the socket is \0 plus the git top directory
 static struct sockaddr_un addr = {
@@ -42,4 +46,31 @@ int net_connect(void) {
 	}
 	fcntl(sock,F_SETFL,fcntl(sock,F_GETFL) | O_NONBLOCK);
 	return sock;
+}
+
+static struct ucred ucred;
+static void getcred(int sock) {
+	static bool gotcred = false;
+	if(gotcred) return;
+	int len = sizeof(ucred);
+	assert(0 == getsockopt(sock, SOL_SOCKET, SO_PEERCRED, &ucred, &len));
+	gotcred = true;
+}
+
+/* if you bind a unix socket, then pass it to a child process, then close the socket in the
+	 parent process, then connect to the socket from parent to child, then SO_PEERCRED will
+	 still think the socket's owned by the parent. Only when the parent process dies is this
+	 corrected. So if we forked, just use that pid, ignoring SO_PEERCRED
+*/
+
+static pid_t forkhack = -1;
+void net_forkhack(pid_t pid) {
+	forkhack = pid;
+}
+
+pid_t net_pid(int sock) {
+	if(forkhack != -1)
+		return forkhack;
+	getcred(sock);	
+	return ucred.pid;
 }
