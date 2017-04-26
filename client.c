@@ -232,8 +232,6 @@ int main(int argc, char *argv[])
 			if(pid == 0) {
 				setsid();
 
-				fprintf(message, "Umm: %ld %ld\n",pid, net_pid(sock));
-
 				// don't bother saving stdout... emacs ignores stdout after process is gone
 				// dup2(log,1);
 				// make sure the socket is on fd 3
