@@ -165,7 +165,7 @@ int main(int argc, char *argv[])
 				return;
 			}
 			pid_t pid = *((pid_t*)buf->base);
-
+			
 			fprintf(message, "Server PID: %ld %ld\n",pid, net_pid(sock));
 			uv_read_stop(stream);
 		} else {
@@ -231,6 +231,8 @@ int main(int argc, char *argv[])
 			int pid = fork();
 			if(pid == 0) {
 				setsid();
+
+				fprintf(message, "Umm: %ld %ld\n",pid, net_pid(sock));
 
 				// don't bother saving stdout... emacs ignores stdout after process is gone
 				// dup2(log,1);
