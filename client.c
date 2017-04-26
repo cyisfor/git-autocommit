@@ -132,24 +132,62 @@ int main(int argc, char *argv[])
 	uv_timer_t trying;
 	uv_timer_init(uv_default_loop(),&trying);
 
+	char buf[0x1000];
+	int sock = -1;
+
 	void alloc_cb(uv_handle_t* handle, size_t size, uv_buf_t* ret) {
-		ret->base = malloc(size);
-		ret->len = size;
+		ret->base = buf;
+		ret->len = 0x1000;
 	}
 
-	void get_info(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
-		assert(nread == sizeof(pid_t));
-		pid_t pid = *((pid_t*)buf->base);
-		fprintf(message, "Server PID: %ld\n",pid);
+	void (*csucks)(void);
+
+	void restart_when_closed(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
+		assert(nread == UV_ECONNRESET);
+		uv_close((uv_handle_t*)stream, (void*)csucks);
+	}
+
+	void kill_remote(uv_stream_t* stream, ssize_t err) {
+		fprintf(message, "Killing remote... %s %d\n",uv_strerror(err), net_pid(sock));
 		uv_read_stop(stream);
+		if(err != UV_ECONNRESET) {
+			uv_read_start(stream, &alloc_cb, restart_when_closed);
+		} else {
+			uv_close((uv_handle_t*)stream, (void*)csucks);
+		}
+		kill(net_pid(sock),SIGTERM);
 	}
 
-	void cleanup(uv_write_t* req, int status) {
+	void get_reply(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
 		if(op == INFO) {
-			uv_read_start((uv_stream_t*)&conn, alloc_cb, get_info);
+			if(nread != sizeof(pid_t)) {
+				kill_remote(stream, nread);
+				return;
+			}
+			pid_t pid = *((pid_t*)buf->base);
+			sleep(1);
+			fprintf(message, "Server PID: %ld %ld\n",pid, net_pid(sock));
+			uv_read_stop(stream);
 		} else {
-			exit(0);
+			if(nread != 1) {
+				kill_remote(stream, nread);
+				return;
+			}
+			char res = *buf->base;
+			switch(res) {
+			case 0:
+				// success
+				uv_read_stop(stream);
+				break;
+			default:
+				fprintf(message, "Got weirdness %d\n",res);
+				abort();
+			};
 		}
+	}
+
+	void await_reply(uv_write_t* req, int status) {
+		uv_read_start((uv_stream_t*)&conn, alloc_cb, get_reply);
 	}
 	
 	void on_connect(void) {
@@ -170,20 +208,23 @@ int main(int argc, char *argv[])
 			*((u16*)dest.base) = 0;
 			dest.base[2] = op;
 		}
-		uv_write(&writing, (uv_stream_t*) &conn, &dest, 1, cleanup);
+		uv_write(&writing, (uv_stream_t*) &conn, &dest, 1, await_reply);
 	}
 
 	void try_connect(void) {
 		// uv_pipe_connect fails on abstract sockets
 		// https://github.com/joyent/libuv/issues/1486
-		int sock = net_connect();
+		sock = net_connect();
 		if(sock == -1) {
-			if(++tries != 3) return;
+			if(++tries > 3) {
+				fprintf(message,"Couldn't spawn server %d\n",tries);
+				abort();
+			}
 
 			if(quitting) exit(0);
 			
 			// try to bind
-			int sock = net_bind();
+			sock = net_bind();
 			if(sock <= 0) return; // already bound, hopefully
 			
 			// we got it. start the server
@@ -237,6 +278,7 @@ int main(int argc, char *argv[])
 			on_connect();
 		}
 	}
+	csucks = try_connect;
 	uv_timer_start(&trying, (void*)try_connect, 0, 200);
 	uv_run(uv_default_loop(), UV_RUN_DEFAULT);
 	return 0;
