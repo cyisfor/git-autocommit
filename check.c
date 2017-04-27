@@ -37,6 +37,8 @@ struct check_context {
 
 #define BLOCKSIZE 512
 
+typedef struct check_context *CC;
+
 static void alloc_cb(uv_handle_t* handle, size_t size, uv_buf_t* ret) {
 	CC ctx = (CC) handle;
 	size_t unchecked = ctx->read - ctx->checked;
@@ -67,6 +69,8 @@ static void cleanup(uv_handle_t* h) {
 	free(ctx);
 	//puts("cleaned up");
 }
+
+static void queue_commit(CC ctx);
 
 static void on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
 	CC ctx = (CC) stream;
