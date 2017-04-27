@@ -100,7 +100,7 @@ void repo_check(git_error_code e) {
 	exit(e);
 }
 
-void repo_add(char* path) {
+void repo_add(const char* path) {
 	git_index* idx;
 	repo_check(git_repository_index(&idx, repo));
 	git_index_read(idx, 1);
