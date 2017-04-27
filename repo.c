@@ -2,6 +2,7 @@
 #include "repo.h"
 
 #include <git2/global.h>
+#include <git2/index.h>
 
 #include <unistd.h> // chdir
 #include <fcntl.h> // openat
@@ -97,4 +98,21 @@ void repo_check(git_error_code e) {
 	}
 
 	exit(e);
+}
+
+void repo_add(char* path) {
+	git_index* idx;
+	repo_check(git_repository_index(&idx, repo));
+	git_index_read(idx, 1);
+	assert(idx);
+	assert(path);
+	
+	// don't repo_check b/c this fails if already added
+	if(0 == git_index_add_bypath(idx, path)) {
+		printf("added path %s\n",path);
+		git_index_write(idx);
+	} else {
+		printf("error adding path %s\n",path);
+	}
+	git_index_free(idx);
 }
