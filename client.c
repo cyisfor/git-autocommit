@@ -71,7 +71,6 @@ int main(int argc, char *argv[])
 {
 	// first arg = name of file that was saved
 
-
 	FILE* message = setuplog();
 
 	// now everything written to "message" goes to stdout (emacs)
@@ -224,7 +223,8 @@ int main(int argc, char *argv[])
 			// try to bind
 			sock = net_bind();
 			if(sock <= 0) return; // already bound, hopefully
-			
+			fprintf(message, "Got socket %d\n",sock);
+
 			// we got it. start the server
 			int pid = fork();
 			assert(pid >= 0);
@@ -236,7 +236,9 @@ int main(int argc, char *argv[])
 				for(i=sock+1;i < sock+10; ++i) {
 					close(i);
 				}
-				close(0);
+				close(0); // no stdin plz
+				
+				fclose(message); // don't bother keeping this open
 
 				// call check_run directly, instead of wasting time with execve
 
