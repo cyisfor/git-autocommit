@@ -114,6 +114,7 @@ int main(int argc, char *argv[])
 		printf("path %s\n",path);
 		plen = repo_relative(&path, plen);
 		printf("repo relative path %s\n",path);
+		repo_add(path);
 	}
 	
 	net_set_addr();
@@ -126,7 +127,6 @@ int main(int argc, char *argv[])
 	uv_pipe_t conn;
 	uv_write_t writing;
 	uv_pipe_init(uv_default_loop(), &conn, 1);
-
 
 	int tries = 0;
 	uv_timer_t trying;
@@ -194,20 +194,7 @@ int main(int argc, char *argv[])
 		tries = 0;
 		uv_timer_stop(&trying);
 
-		uv_buf_t dest;
-		if(op == ADD) {
-			dest.len = plen+2;
-			dest.base = alloca(dest.len);
-			*((u16*)dest.base) = dest.len - 2;
-			memcpy(dest.base + 2, path, dest.len - 2);
-		} else {
-			// operations besides ADD are rare, so save a 1 byte op for ADD,
-			// add a 2-byte 0-size for "not ADD"
-			dest.len = 3;
-			dest.base = alloca(3);
-			*((u16*)dest.base) = 0;
-			dest.base[2] = op;
-		}
+		uv_buf_t dest = { &op, 1 };
 		uv_write(&writing, (uv_stream_t*) &conn, &dest, 1, await_reply);
 	}
 
@@ -258,17 +245,7 @@ int main(int argc, char *argv[])
 					 4+ => nothing
 				*/
 
-				setenv("bound","1",1);
-				
-				// ...client -> ...server
-				size_t len = strlen(argv[0]);
-				argv[0][len-6] = 's';
-				argv[0][len-5] = 'e';
-				argv[0][len-4] = 'r';
-				argv[0][len-3] = 'v';
-				argv[0][len-2] = 'e';
-				argv[0][len-1] = 'r';
-				execl(argv[0],argv[0],git_repository_path(repo),NULL);
+				server_run();
 			}
 			fprintf(message,"AC: starting server %d\n",pid);
 			net_forkhack(pid);
