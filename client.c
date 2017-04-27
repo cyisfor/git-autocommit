@@ -20,6 +20,7 @@
 #include <pwd.h> // getpw*
 #include <sys/stat.h> // mkdir
 #include <error.h> // 
+#include <sys/prctl.h>
 
 int open_home(void) {
 	const char* path = getenv("HOME");
@@ -226,6 +227,11 @@ int main(int argc, char *argv[])
 			assert(pid >= 0);
 			if(pid == 0) {
 				setsid();
+
+				// no overflow why?
+				strcpy(argv[0], "autocommit server");
+				prctl(PR_SET_NAME, "autocommit server", 0, 0, 0);
+
 
 /*				dup2(sock,3);
 					sock = 3; */
