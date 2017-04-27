@@ -1,7 +1,7 @@
 #include "ops.h"
 #include "check.h"
 #include "activity.h"
-
+#include "hooks.h"
 #include "repo.h"
 
 #include <git2/diff.h>
@@ -290,6 +290,9 @@ static void commit_now(CC ctx, i32 lines, i32 words, i32 characters) {
 		// no empty commits, please
 		return;
 	}
+
+	HOOK_RUN("pre-commit");
+	
 	repo_check(git_repository_index(&idx, repo));
 
 	repo_check(git_signature_now(&me, "autocommit", "autocommit"));
@@ -335,7 +338,8 @@ static void commit_now(CC ctx, i32 lines, i32 words, i32 characters) {
 	git_commit_free(head);
 	git_tree_free(tree);
 	git_signature_free(me);
-	
+
+	HOOK_RUN("post-commit");
 }
 
 // this should be global, so that it doesn't commit several times one for each connection,
@@ -430,6 +434,7 @@ static void maybe_commit(CC ctx, i32 lines, i32 words, i32 characters) {
 void check_run(int sock) {
 	check_init();
 	activity_init();
+	hooks_init();
 	
 	uv_pipe_t server;
 	uv_pipe_init(uv_default_loop(), &server, 1);

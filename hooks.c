@@ -1,4 +1,6 @@
 #include "repo.h"
+#include "hooks.h"
+#include "myassert.h"
 
 #include <search.h> // tfind, tsearch
 #include <dlfcn.h> // dlopen, dlsym
@@ -6,18 +8,23 @@
 #include <stdarg.h> // va_*
 #include <stdio.h>
 #include <sys/wait.h> // waitpid
+#include <stdbool.h>
+#include <string.h> // memcmp
+#include <limits.h> // PATH_MAX
+#include <sys/stat.h>
+#include <error.h>
 
 #define LITLEN(s) s,sizeof(s)-1
 
 static void checkpid(int pid, char* fmt, ...) {
 	va_list arg;
-	va_start(fmt, arg);
+	va_start(arg, fmt);
 	void erra(const char* fmt2, ...) {
-		vfprintf(stderr,arg);
+		vfprintf(stderr,fmt, arg);
 		va_end(arg);
-		va_start(fmt2,arg);
+		va_start(arg, fmt2);
 		fputc(' ',stderr);
-		vfprintf(stderr,arg);
+		vfprintf(stderr,fmt2,arg);
 		fputc('\n',stderr);
 		abort();
 	}
@@ -38,8 +45,20 @@ static void checkpid(int pid, char* fmt, ...) {
 
 typedef void (*runner)(void*);
 
+typedef struct buf {
+	const char* base;
+	int len;
+} buf;
+
+static int compare(struct buf* a, struct buf* b) {
+	int len = a->len;
+	if(len != b->len)
+		return len - b->len;
+	return memcmp(a->base, b->base, len);
+}
+
 struct hook {
-	uv_buf_t name;
+	buf name;
 	bool islib;
 	union {
 		struct {
@@ -50,9 +69,7 @@ struct hook {
 	} u;
 };
 
-static bool initialize_hook(struct hook* hook, const char* name, size_t nlen) {
-	hook->name = { name, nlen };
-
+static struct hook* new_hook(const char* name, size_t nlen) {
 	char csource[0x100];
 	memcpy(csource,name,nlen);
 	size_t len = nlen;
@@ -86,17 +103,26 @@ static bool initialize_hook(struct hook* hook, const char* name, size_t nlen) {
 		}
 		checkpid(pid, "gcc died building %s",name);
 	}
+	struct hook* hook = NULL;
 
-	void load_so() {
+	void init_hook(void) {
+			hook = malloc(sizeof(struct hook));
+			hook->name.base = name;
+			hook->name.len = nlen;
+	}
+
+	struct hook* load_so() {
 		void* dll = dlopen(so,RTLD_LAZY | RTLD_LOCAL);
 		assert(dll);
 		typedef void* (*initter)(void);
 		initter init = (initter) dlsym(dll,"init");
+		init_hook();
 		if(init) {
-			hook->run.data = init();
+			hook->u.run.data = init();
 		}
-		hook->run.f = (runner) dlsym(dll,"run");
+		hook->u.run.f = (runner) dlsym(dll,"run");
 		hook->islib = true;
+		return hook;
 	}
 
 	struct stat cstat, sostat;
@@ -113,23 +139,25 @@ static bool initialize_hook(struct hook* hook, const char* name, size_t nlen) {
 		return load_so();
 	} else {
 		if(0 == stat(name,&sostat)) {
+			init_hook();
 			hook->islib = false;
 			assert(realpath(name,hook->u.path));
+			return hook;
 		} else {
-			return false;
+			return NULL;
 			// no hook for this name exists
 		}
 	}
-	return true;
+	abort(); // nuever 
 }
 
 static void* hooks = NULL;
 
-static void run(const char* name, const size_t nlen) {
+void hook_run(const char* name, const size_t nlen) {
 	struct hook search = {
 		name: { name, nlen }
 	};
-	struct hook* hook = tfind(&search, &hooks, compare);
+	struct hook* hook = tfind(&search, &hooks, (void*)compare);
 	if(!hook) {
 		return;
 	}
@@ -139,15 +167,15 @@ static void run(const char* name, const size_t nlen) {
 	} else {
 		int pid = fork();
 		if(pid == 0) {
-			char* args[] = { hook->u.path };			
-			execv(path,args);
+			char* args[] = { hook->u.path };
+			execv(hook->u.path,args);
 			abort();
 		}
 		assert_gt(0,pid);
 		int status;
 		assert_ne(-1,waitpid(pid, &status, 0));
 		if(WIFSIGNALED(status)) {
-			error(WTERMSIG(status),0,"%s hook died with signal %d",name,WTERMSIG(status));
+error(WTERMSIG(status),0,"%s hook died with signal %d",name,WTERMSIG(status));
 		} else if(WIFEXITED(status)) {
 			int res = WEXITSTATUS(status);
 			if(res != 0) {
@@ -157,15 +185,10 @@ static void run(const char* name, const size_t nlen) {
 	}
 }
 
-void hooks_run(void) {
-	run(LITLEN("pre-commit"));
-	run(LITLEN("post-commit"));
-}
-
 static void load(const char* name, const size_t nlen) {
-	struct hook* hook = malloc(sizeof(struct hook));
-	initialize_hook(hook,name,nlen);
-	assert0(tsearch((void*) hook, &hooks, compare));
+	struct hook* hook = new_hook(name,nlen);
+	if(hook) 
+		assert0(tsearch((void*) hook, &hooks, (void*)compare));
 }
 
 void hooks_init(void) {

@@ -1,9 +1,11 @@
 OPT=-g
-LDFLAGS+=$(OPT) -luv -lgit2
-CFLAGS+=$(OPT)
+LDFLAGS+=$(OPT) -luv -lgit2 -ldl
+CFLAGS+=$(OPT) -DSOURCE_LOCATION=`pwd`
 all: index_reader server client
-server: server.o activity.o check.o net.o repo.o
-client: client.o activity.o check.o net.o repo.o
+libautocommit.a: activity.o check.o net.o repo.o hooks.o
+	ar crs $@ $^
+server: server.o libautocommit.a
+client: client.o libautocommit.a
 clean:
 	git clean -fdx
 
