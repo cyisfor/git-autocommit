@@ -13,6 +13,8 @@
 #include <limits.h> // PATH_MAX
 #include <sys/stat.h>
 #include <error.h>
+#include <errno.h>
+
 
 #define LITLEN(s) s,sizeof(s)-1
 
@@ -32,7 +34,9 @@ static void checkpid(int pid, char* fmt, ...) {
 		erra("bad pid %d",pid);
 	}
 	int status;
-	assert_ne(-1,waitpid(pid, &status, 0));
+	if(-1 == waitpid(pid, &status, 0)) {
+		error(errno,errno,"couldn't wait?");
+	}
 	if(WIFSIGNALED(status)) {
 		erra("died with signal %d",WTERMSIG(status));
 	} else if(WIFEXITED(status)) {
@@ -69,6 +73,9 @@ struct hook {
 	} u;
 };
 
+#ifndef PLUGIN_FLAGS
+#define PLUGIN_FLAGS "-g", "-O2", 
+
 static struct hook* new_hook(const char* name, size_t nlen) {
 	char csource[0x100];
 	memcpy(csource,name,nlen);
@@ -78,11 +85,13 @@ static struct hook* new_hook(const char* name, size_t nlen) {
 	csource[nlen+2] = '\0';
 
 	char so[0x100];
-	memcpy(so,name,nlen);
-	so[nlen] = '.';
-	so[nlen+1] = 's';
-	so[nlen+2] = 'o';
-	so[nlen+3] = '\0';
+	memcpy(so+2,name,nlen);
+	so[0] = '.';
+	so[1] = '/';
+	so[nlen+2] = '.';
+	so[nlen+3] = 's';
+	so[nlen+4] = 'o';
+	so[nlen+5] = '\0';
 
 	// todo: reinitialize if the source changes...
 
@@ -93,7 +102,10 @@ static struct hook* new_hook(const char* name, size_t nlen) {
 			if(cc == NULL) cc = "cc";
 			char* args[] = {
 				cc,
+				PLUGIN_FLAGS
+				"-fPIC",
 				"-shared",
+				"-I", SOURCE_LOCATION, // -D this
 				"-o",
 				so,
 				csource,
@@ -173,7 +185,9 @@ void hook_run(const char* name, const size_t nlen) {
 		}
 		assert_gt(0,pid);
 		int status;
-		assert_ne(-1,waitpid(pid, &status, 0));
+		if(-1 == waitpid(pid, &status, 0)) {
+			error(errno,errno,"couldn't wait?");
+		}
 		if(WIFSIGNALED(status)) {
 error(WTERMSIG(status),0,"%s hook died with signal %d",name,WTERMSIG(status));
 		} else if(WIFEXITED(status)) {
@@ -188,13 +202,14 @@ error(WTERMSIG(status),0,"%s hook died with signal %d",name,WTERMSIG(status));
 static void load(const char* name, const size_t nlen) {
 	struct hook* hook = new_hook(name,nlen);
 	if(hook) 
-		assert0(tsearch((void*) hook, &hooks, (void*)compare));
+		tsearch((void*) hook, &hooks, (void*)compare);
 }
 
 void hooks_init(void) {
 	assert0(chdir(git_repository_path(repo)));
 	mkdir("hooks",0755);
 	assert0(chdir("hooks"));
+	char buf[PATH_MAX];
 	load(LITLEN("pre-commit"));
 	load(LITLEN("post-commit"));
 	assert0(chdir(git_repository_workdir(repo)));
