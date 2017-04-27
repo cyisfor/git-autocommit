@@ -22,12 +22,14 @@
 #include <sys/wait.h> // waitpid
 #include <ctype.h> // isspace
 #include <stdbool.h>
+#include <error.h>
+
 
 typedef int32_t i32;
 
 struct check_context {
 	uv_tcp_t stream;
-	size_t checked; // parsed paths up to here
+	size_t checked; // parsed messages up to here
 	size_t read; // chars read so far
 	size_t space; // space in buffer
 	char* buf;
@@ -74,39 +76,45 @@ static void on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
 	}
 	ctx->read += nread;
 
-	// now read all the paths we see.
+	void just_exit() {
+		exit(0);
+	}
+
+	// now read all the messages we see.
 	for(;;) {
-		// break if there isn't even a size to be read
-		if(ctx->read < ctx->checked + 2) break;
+		// break if there isn't a message to be read
+		if(ctx->read < ctx->checked + 1) break;
+		
 		// no ntohs needed since it'd be silly not to run client/server on the same machine.
-		u16 size = *((u16*)(ctx->buf + ctx->checked));
-		if(size == 0) {
-			// special message incoming
-			
-			// the message hasn't finished coming in yet, break
-			if(ctx->read < ctx->checked + 3) break;
-			
-			switch(ctx->buf[ctx->checked+2]) {
-			case QUIT:
-				exit(0);
-			case INFO:
-				// get pid
-				{ pid_t pid = getpid();
-					uv_buf_t buf = { (char*)&pid, sizeof(pid) };
-					uv_write_t* req = malloc(sizeof(uv_write_t));
-					uv_write(req, stream, &buf, 1, (void*)free);
-				}
-			};
-			ctx->checked += 3; // size plus message
-			continue;
+
+		const uv_buf_t ok = { "\0", 1 };
+		
+		switch(ctx->buf[ctx->checked]) {
+		case QUIT:
+		{
+			uv_write_t* req = malloc(sizeof(uv_write_t));
+			uv_write(req, stream, &ok, 1, (void*)just_exit);
 		}
-		// the path hasn't finished coming in yet, break
-		if(ctx->read < ctx->checked + 2 + size) break;
-		char* path = malloc(size+1); // +1 for the null
-		memcpy(path, ctx->buf + ctx->checked + 2, size);
-		path[size] = '\0';
-		check_path(ctx, path,size);
-		ctx->checked += 2 + size;
+		return;
+		case INFO:
+		{
+			pid_t pid = getpid();
+			uv_buf_t buf = { (char*)&pid, sizeof(pid) };
+			uv_write_t* req = malloc(sizeof(uv_write_t));
+			uv_write(req, stream, &buf, 1, (void*)free);
+		}
+		break;
+		case ADD:
+		{ 
+			queue_commit(ctx);
+			uv_write_t* req = malloc(sizeof(uv_write_t));
+			uv_write(req, stream, &ok, 1, (void*)free);
+		}
+		break;
+		default:
+			error(23,0,"bad message %d\n",ctx->buf[ctx->checked]);
+		};
+		++ctx->checked; // move past this message.
 	}
 }
 
@@ -128,7 +136,7 @@ void check_accept(uv_stream_t* server) {
 	activity_poke();
 }
 
-static void maybe_commit(CC ctx, char* path, i32 lines, i32 words, i32 characters);
+static void maybe_commit(CC ctx, i32 lines, i32 words, i32 characters);
 
 // don't cache the head, because other processes could commit to the repository while we're running!
 static git_commit* get_head(void) {
@@ -153,22 +161,7 @@ static git_commit* get_head(void) {
 	return head;
 }
 
-void check_path(CC ctx, char* path, u16 len) {
-	git_index* idx;
-	repo_check(git_repository_index(&idx, repo));
-	git_index_read(idx, 1);
-	// don't repo_check b/c this fails if already added
-	assert(idx);
-	assert(path);
-	
-	if(0 == git_index_add_bypath(idx, path)) {
-		printf("added path %s\n",path);
-		git_index_write(idx);
-	} else {
-		printf("error adding path %s\n",path);
-	}
-	git_index_free(idx);
-
+static void queue_commit(CC ctx) {
 	git_diff* diff = NULL;
 	git_tree* headtree = NULL;
 
@@ -270,11 +263,11 @@ void check_path(CC ctx, char* path, u16 len) {
 
 	repo_check(git_diff_foreach(diff, on_file, NULL, NULL, on_line, NULL));
 	git_diff_free(diff);
-	maybe_commit(ctx, path, lines, words, characters);
+	maybe_commit(ctx, lines, words, characters);
 }
 
 
-static void commit_now(CC ctx, char* path, i32 lines, i32 words, i32 characters) {
+static void commit_now(CC ctx, i32 lines, i32 words, i32 characters) {
 	git_signature *me = NULL;
 	git_index* idx = NULL;
 	git_diff* diff;
@@ -297,8 +290,10 @@ static void commit_now(CC ctx, char* path, i32 lines, i32 words, i32 characters)
 
 	repo_check(git_signature_now(&me, "autocommit", "autocommit"));
 	char message[0x1000];
-	ssize_t amt = snprintf(message,0x1000,"auto (%s) %lu %lu %lu",
-												 path, lines, words, characters);
+	// why add an arbitrary path to the git log, whatever happened to have been saved
+	// back when the timer was started?
+	ssize_t amt = snprintf(message,0x1000,"auto %lu %lu %lu",
+												 lines, words, characters);
 	write(1, "AC: ",4);
 	write(1, message,amt); // stdout fileno in a weird place to stop unexpected output
 	write(1, " ",1);
@@ -337,7 +332,6 @@ static void commit_now(CC ctx, char* path, i32 lines, i32 words, i32 characters)
 	git_tree_free(tree);
 	git_signature_free(me);
 	
-	free(path); // won't need this after the commit is done...
 }
 
 // this should be global, so that it doesn't commit several times one for each connection,
@@ -345,7 +339,6 @@ static void commit_now(CC ctx, char* path, i32 lines, i32 words, i32 characters)
 struct commit_info {
 	uv_timer_t committer;
 	time_t next_commit;
-	char* path;
 	i32 lines;
 	i32 words;
 	i32 characters;
@@ -356,11 +349,10 @@ void check_init(void) {
 }
 
 static void commit_later(uv_timer_t* handle) {
-	commit_now((CC)handle->data, ci.path, ci.lines, ci.words, ci.characters);
-	ci.path = NULL; // just in case
+	commit_now((CC)handle->data, ci.lines, ci.words, ci.characters);
 }
 
-static void maybe_commit(CC ctx, char* path, i32 lines, i32 words, i32 characters) {
+static void maybe_commit(CC ctx, i32 lines, i32 words, i32 characters) {
 	/* if between 1 and 30, go between 3600 and 300s,
 		 if between 30 and 60, go between 300 and 60s
 		 if between 60 and 600, go between 60 and 0 */
@@ -416,22 +408,17 @@ static void maybe_commit(CC ctx, char* path, i32 lines, i32 words, i32 character
 
 	// don't bother waiting if it's more than an hour
 	if(d >= 3600) return;
-	if(d <= 1) {
+	
+	time_t now = time(NULL);
+	if(ci.next_commit == 0 || now + d < ci.next_commit) {
+		// keep pushing the timer back, so we commit sooner if more changes
+		char buf[0x200];
+		write(1,buf,snprintf(buf,0x200,"AC: waiting %.2f\n",d)); // weird stdout fd
+		
 		uv_timer_stop(&ci.committer);
-		commit_now(ctx,path,lines,words,characters);
-	} else {
-		time_t now = time(NULL);
-		if(ci.next_commit == 0 || now + d < ci.next_commit) {
-			// keep pushing the timer back, so we commit sooner if more changes
-			char buf[0x200];
-			write(1,buf,snprintf(buf,0x200,"AC: %s waiting %.2f\n",path,d)); // weird stdout fd
-
-			uv_timer_stop(&ci.committer);
-			ci.next_commit = now + d;
-			ci.path = path;
-			ci.words = words;
-			ci.characters = characters;
-			uv_timer_start((uv_timer_t*)&ci, commit_later, d * 1000, 0);
-		}
+		ci.next_commit = now + d;
+		ci.words = words;
+		ci.characters = characters;
+		uv_timer_start((uv_timer_t*)&ci, commit_later, d * 1000, 0);
 	}
 }
