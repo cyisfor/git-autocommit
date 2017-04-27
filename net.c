@@ -30,9 +30,9 @@ int net_bind(void) {
 			error(errno,errno,"bind failed");
 		return -1;
 	}
-	if(0!=listen(sock, 0x10))
+/*	if(0!=listen(sock, 0x10))
 		error(errno,errno,"listen failed");
-
+*/
 	fcntl(sock,F_SETFL,fcntl(sock,F_GETFL) | O_NONBLOCK);
 	return sock;
 }

@@ -122,7 +122,8 @@ static void on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
 	}
 }
 
-void check_accept(uv_stream_t* server) {
+static void on_accept(uv_stream_t* server, int err) {
+	assert(err >= 0);
 	CC ctx = (CC) malloc(sizeof(struct check_context));
 	uv_tcp_init(uv_default_loop(), &ctx->stream);
 	int res = uv_accept(server, (uv_stream_t*) &ctx->stream);
@@ -425,4 +426,16 @@ static void maybe_commit(CC ctx, i32 lines, i32 words, i32 characters) {
 		ci.characters = characters;
 		uv_timer_start((uv_timer_t*)&ci, commit_later, d * 1000, 0);
 	}
+}
+
+void check_run(int sock) {
+	check_init();
+	activity_init();
+	
+	uv_pipe_t server;
+	uv_pipe_init(uv_default_loop(), &server, 1);
+	assert(0==uv_pipe_open(&server, sock));
+	
+	uv_listen((uv_stream_t*)&server, 0x10, on_accept);
+	uv_run(uv_default_loop(), UV_RUN_DEFAULT);
 }

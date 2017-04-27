@@ -2,6 +2,7 @@
 #include "ops.h"
 #include "repo.h"
 #include "net.h"
+#include "check.h"
 
 #include <uv.h>
 
@@ -194,7 +195,7 @@ int main(int argc, char *argv[])
 		tries = 0;
 		uv_timer_stop(&trying);
 
-		uv_buf_t dest = { &op, 1 };
+		const uv_buf_t dest = { (char*)&op, 1 };
 		uv_write(&writing, (uv_stream_t*) &conn, &dest, 1, await_reply);
 	}
 
@@ -219,17 +220,6 @@ int main(int argc, char *argv[])
 			if(pid == 0) {
 				setsid();
 
-				// don't bother saving stdout... emacs ignores stdout after process is gone
-				// dup2(log,1);
-				// make sure the socket is on fd 3
-				// we could snprintf(somebuf,0x10,"%d",sock) for the execve, then atoi, but dup2 is cheaper
-				if(sock == 3) {
-					fcntl(sock,F_SETFL,FD_CLOEXEC | fcntl(sock,F_GETFL));
-				} else {
-					dup2(sock,3); // note: dup2 clears FD_CLOEXEC
-					close(sock);
-				}
-
 				// emacs tries to trap you by opening a secret unused pipe
 				int i;
 				for(i=sock+1;i < sock+10; ++i) {
@@ -237,19 +227,13 @@ int main(int argc, char *argv[])
 				}
 				close(0);
 
-				/* now
-					 0 => nothing
-					 1 => log
-					 2 => log
-					 3 => bound, listening socket
-					 4+ => nothing
-				*/
+				// call check_run directly, instead of wasting time with execve
 
-				server_run();
+				check_run(sock);
 			}
 			fprintf(message,"AC: starting server %d\n",pid);
 			net_forkhack(pid);
-			//close(sock); // XXX: could we finagle this socket into a connected one without closing it?
+			close(sock); // XXX: could we finagle this socket into a connected one without closing it?
 			try_connect(); // we should be able to connect right away since listen() already called
 		} else {
 			assert(0==uv_pipe_open(&conn, sock));
