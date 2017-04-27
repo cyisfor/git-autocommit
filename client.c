@@ -138,7 +138,8 @@ int main(int argc, char *argv[])
 	void (*csucks)(void);
 
 	void restart_when_closed(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
-		if(nread != UV_ECONNRESET) {
+		if(nread > 0) return;
+		if(nread != UV_ECONNRESET && nread != UV_EOF) {
 			fprintf(message, "um %s\n",uv_strerror(nread));
 			abort();
 		}
@@ -192,7 +193,7 @@ int main(int argc, char *argv[])
 
 	void await_reply(uv_write_t* req, int status) {
 		uv_read_start((uv_stream_t*)&conn, alloc_cb, get_reply);
-		uv_timer_start(&trying, (void*)retry, 1000, 0);
+		uv_timer_start(&trying, (void*)retry, 1000000, 0);
 	}
 	
 	void on_connect(void) {
@@ -226,8 +227,8 @@ int main(int argc, char *argv[])
 			if(pid == 0) {
 				setsid();
 
-				dup2(sock,3);
-				sock = 3;
+/*				dup2(sock,3);
+					sock = 3; */
 
 				// emacs tries to trap you by opening a secret unused pipe
 				int i;
