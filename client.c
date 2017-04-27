@@ -106,9 +106,9 @@ int main(int argc, char *argv[])
 
 	if(op == ADD) {
 		// hissy fit......
-		printf("path %s\n",path);
+		// printf("path %s\n",path);
 		plen = repo_relative(&path, plen);
-		printf("repo relative path %s\n",path);
+		// printf("repo relative path %s\n",path);
 		repo_add(path);
 	}
 	
