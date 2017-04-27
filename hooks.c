@@ -50,7 +50,7 @@ static void checkpid(int pid, char* fmt, ...) {
 typedef void (*runner)(void*);
 
 typedef struct buf {
-	const char* base;
+	char* base;
 	int len;
 } buf;
 
@@ -120,7 +120,8 @@ static struct hook* new_hook(const char* name, size_t nlen) {
 
 	void init_hook(void) {
 			hook = malloc(sizeof(struct hook));
-			hook->name.base = name;
+			hook->name.base = malloc(nlen); // sigh
+			memcpy(hook->name.base,name,nlen);
 			hook->name.len = nlen;
 	}
 
@@ -167,10 +168,10 @@ static struct hook* new_hook(const char* name, size_t nlen) {
 static void* hooks = NULL;
 
 void hook_run(const char* name, const size_t nlen) {
-	struct hook search = {
+	const struct hook search = {
 		name: { name, nlen }
 	};
-	struct hook* hook = tfind(&search, &hooks, (void*)compare);
+	struct hook* hook = *((struct hook**)tfind(&search, &hooks, (void*)compare));
 	if(!hook) {
 		return;
 	}
@@ -190,7 +191,7 @@ void hook_run(const char* name, const size_t nlen) {
 			error(errno,errno,"couldn't wait?");
 		}
 		if(WIFSIGNALED(status)) {
-error(WTERMSIG(status),0,"%s hook died with signal %d",name,WTERMSIG(status));
+			error(WTERMSIG(status),0,"%s hook died with signal %d",name,WTERMSIG(status));
 		} else if(WIFEXITED(status)) {
 			int res = WEXITSTATUS(status);
 			if(res != 0) {
