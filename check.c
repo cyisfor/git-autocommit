@@ -24,7 +24,6 @@
 #include <stdbool.h>
 #include <error.h>
 
-
 typedef int32_t i32;
 
 struct check_context {

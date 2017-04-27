@@ -144,7 +144,10 @@ int main(int argc, char *argv[])
 	void (*csucks)(void);
 
 	void restart_when_closed(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
-		assert(nread == UV_ECONNRESET);
+		if(nread != UV_ECONNRESET) {
+			fprintf(message, "um %s\n",uv_strerror(nread));
+			abort();
+		}
 		uv_close((uv_handle_t*)stream, (void*)csucks);
 	}
 
@@ -171,7 +174,7 @@ int main(int argc, char *argv[])
 			uv_read_stop(stream);
 		} else {
 			if(nread != 1) {
-				kill_remote(stream, nread);
+ 				kill_remote(stream, nread);
 				return;
 			}
 			char res = *buf->base;
@@ -187,8 +190,14 @@ int main(int argc, char *argv[])
 		}
 	}
 
+	void retry() {
+		kill_remote((uv_stream_t*)&conn, 0);
+		csucks();
+	}
+
 	void await_reply(uv_write_t* req, int status) {
 		uv_read_start((uv_stream_t*)&conn, alloc_cb, get_reply);
+		uv_timer_start(&trying, (void*)retry, 1000, 0);
 	}
 	
 	void on_connect(void) {
@@ -217,6 +226,7 @@ int main(int argc, char *argv[])
 			
 			// we got it. start the server
 			int pid = fork();
+			assert(pid >= 0);
 			if(pid == 0) {
 				setsid();
 
