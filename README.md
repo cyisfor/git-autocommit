@@ -15,3 +15,5 @@ Note: rebasing produces a totally new revision history, even if you only choose 
 Otherwise, leave the “auto” messages in there, and every time you finish implementing a feature, go `git commit --allow-empty -a -m "recombobulated the frobnicators"` and your revision history will be completely clear to anyone who understands how revisioning works. Don’t leave your messages as “tags” because those don’t go into the revision history, so they won’t appear in the git log.
 
 Oh, and if you just want to see those “meaningful” messages, not the auto ones, go `git log --grep '^auto' --invert-grep`
+
+Now “runs” hooks sorta. If the hook is named something-dot-c, compiled as a .so with current source dir in -I. Define init to initialize, and run(void*) to run the hook.  If the hook is just the name, it’s execve’d.

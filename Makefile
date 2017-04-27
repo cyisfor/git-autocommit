@@ -1,4 +1,4 @@
-OPT=-g
+OPT=-g -O2
 LDFLAGS+=$(OPT) -luv -lgit2 -ldl
 CFLAGS+=$(OPT) -fPIC -DSOURCE_LOCATION='"'`pwd`'"'
 all: index_reader server client

@@ -74,7 +74,8 @@ struct hook {
 };
 
 #ifndef PLUGIN_FLAGS
-#define PLUGIN_FLAGS "-g", "-O2", 
+#define PLUGIN_FLAGS "-g", "-O2",
+#endif
 
 static struct hook* new_hook(const char* name, size_t nlen) {
 	char csource[0x100];
