@@ -152,7 +152,7 @@ int main(int argc, char *argv[])
 	}
 
 	void kill_remote(uv_stream_t* stream, ssize_t err) {
-		fprintf(message, "Killing remote... %s %d\n",uv_strerror(err), net_pid(sock));
+		fprintf(message, "Killing remote... %s %d %d\n",uv_strerror(err), err, net_pid(sock));
 		uv_read_stop(stream);
 		if(err != UV_ECONNRESET) {
 			uv_read_start(stream, &alloc_cb, restart_when_closed);
@@ -163,6 +163,7 @@ int main(int argc, char *argv[])
 	}
 
 	void get_reply(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
+		uv_timer_stop(&trying);
 		if(op == INFO) {
 			if(nread != sizeof(pid_t)) {
 				kill_remote(stream, nread);
@@ -240,14 +241,20 @@ int main(int argc, char *argv[])
 				// call check_run directly, instead of wasting time with execve
 
 				check_run(sock);
+				exit(0);
 			}
 			fprintf(message,"AC: starting server %d\n",pid);
 			net_forkhack(pid);
 			close(sock); // XXX: could we finagle this socket into a connected one without closing it?
 			try_connect(); // we should be able to connect right away since listen() already called
 		} else {
-			assert(0==uv_pipe_open(&conn, sock));
-			on_connect();
+			int res = uv_pipe_open(&conn, sock);
+			if(res == 0) {
+				on_connect();
+			} else {
+				fprintf(message, "um %s\n",uv_strerror(res));
+				close(sock);
+			}
 		}
 	}
 	csucks = try_connect;
