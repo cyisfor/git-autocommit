@@ -49,29 +49,24 @@ void move_to(int loc, ...) {
 
 typedef uint16_t u16;
 
-FILE* setuplog(void) {
-	if(getenv("ferrets") != NULL) {
-		return stdout;
-	}
-			
+void setuplog(void) {	
 	int logloc = open_home();
 	move_to(logloc, ".local", "logs", NULL);
 
 	int log = openat(logloc,"autocommit.log", O_WRONLY|O_CREAT|O_APPEND, 0644);
 	assert(log >= 0);
-	dup2(1,logloc); // logloc isn't in use anymore
+	close(logloc);
 	dup2(log,1);
 	dup2(log,2);
+	close(0);
 	close(log);
-	log = logloc; // HAX
-	return fdopen(log,"wt");
 }
 
 int main(int argc, char *argv[])
 {
 	// first arg = name of file that was saved
 
-	FILE* message = setuplog();
+	FILE* message = stdout;
 
 	// now everything written to "message" goes to stdout (emacs)
 	// while stdout/err goes to a log
@@ -231,14 +226,16 @@ int main(int argc, char *argv[])
 			if(pid == 0) {
 				setsid();
 
+				dup2(sock,3);
+				sock = 3;
+
 				// emacs tries to trap you by opening a secret unused pipe
 				int i;
 				for(i=sock+1;i < sock+10; ++i) {
 					close(i);
 				}
-				close(0); // no stdin plz
-				
-				fclose(message); // don't bother keeping this open
+
+				setuplog();
 
 				// call check_run directly, instead of wasting time with execve
 
