@@ -231,8 +231,7 @@ int main(int argc, char *argv[])
 				// no overflow why?
 				strcpy(argv[0], "autocommit server");
 				prctl(PR_SET_NAME, "autocommit server", 0, 0, 0);
-
-
+				
 /*				dup2(sock,3);
 					sock = 3; */
 

@@ -427,7 +427,7 @@ static void maybe_commit(CC ctx, i32 lines, i32 words, i32 characters) {
 		ci.next_commit = now + d;
 		ci.words = words;
 		ci.characters = characters;
-		uv_timer_start((uv_timer_t*)&ci, commit_later, d * 1000, 0);
+		uv_timer_start((uv_timer_t*)&ci, commit_later, d * 1000 + 1, 0);
 	}
 }
 
