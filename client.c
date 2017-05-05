@@ -243,10 +243,31 @@ int main(int argc, char *argv[])
 
 				setuplog();
 
-				// call check_run directly, instead of wasting time with execve
+				int watcher = fork();
+				if(watcher > 0) {
+					// call check_run directly, instead of wasting time with execve
 
-				check_run(sock);
-				exit(0);
+					check_run(sock);
+					exit(0);
+				}
+				assert(watcher>0);
+				printf("AC: watching PID %d\n",watcher);
+				void onsig(int signal) {
+					kill(watcher,signal);
+					exit(signal);
+				}
+				signal(SIGTERM,onsig);
+				signal(SIGINT,onsig);
+				signal(SIGQUIT,onsig);
+				int res;
+				waitpid(watcher,&res,0);
+				if(WIFEXITED(res)) {
+					if(0 != WEXITSTATUS(res)) {
+						printf("AC watcher: %d server exited with %d\n",watcher,WEXITSTATUS(res));
+					}
+				} else if(WIFSIGNALED(res)) {
+					printf("AC watcher: %d server died with signal %d\n",watcher,WTERMSIG(res));
+				}
 			}
 			fprintf(message,"AC: starting server %d\n",pid);
 			net_forkhack(pid);
