@@ -436,10 +436,10 @@ void check_init(int sock) {
 
 	activity_init();
 	hooks_init();
-	
+
 	uv_pipe_t server;
 	uv_pipe_init(uv_default_loop(), &server, 1);
 	assert(0==uv_pipe_open(&server, sock));
-	
-	uv_listen((uv_stream_t*)&server, 0x10, on_accept);
+
+	assert(0==uv_listen((uv_stream_t*)&server, 0x10, on_accept));
 }

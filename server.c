@@ -29,10 +29,8 @@ int main(int argc, char *argv[])
 	net_set_addr();
 	int sock = net_bind();
 	if(sock == -1) exit(1);
-#if 0
-
 	check_init(sock);
-#endif
+
 	uv_run(uv_default_loop(), UV_RUN_DEFAULT);
 
 	return 0;

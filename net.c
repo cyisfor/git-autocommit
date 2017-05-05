@@ -33,7 +33,7 @@ int net_bind(void) {
 /*	if(0!=listen(sock, 0x10))
 		error(errno,errno,"listen failed");
 */
-	fcntl(sock,F_SETFL,fcntl(sock,F_GETFL) | O_NONBLOCK);
+//	fcntl(sock,F_SETFL,fcntl(sock,F_GETFL) | O_NONBLOCK);
 	return sock;
 }
 
