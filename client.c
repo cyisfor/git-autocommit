@@ -170,6 +170,7 @@ int main(int argc, char *argv[])
 			fprintf(message, "Server PID: %ld %ld\n",pid, net_pid(sock));
 			uv_read_stop(stream);
 		} else {
+			if(nread == 0) return;
 			if(nread != 1) {
  				kill_remote(stream, nread);
 				return;
@@ -216,6 +217,10 @@ int main(int argc, char *argv[])
 			}
 
 			if(quitting) exit(0);
+			if(checking) {
+				fprintf(message, "Server not running.\n");
+				exit(1);
+			}
 			
 			// try to bind
 			sock = net_bind();
