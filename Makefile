@@ -1,8 +1,7 @@
-PKG_CONFIG_PATH=/custom/libuv/lib/pkgconfig
-export PKG_CONFIG_PATH
+P=$(shell env PKG_CONFIG_PATH=/custom/libuv/lib/pkgconfig pkg-config libuv $1)
 OPT=-g -O2
-LDFLAGS+=$(OPT) `pkg-config libuv --libs` -lgit2 -ldl
-CFLAGS+=$(OPT) `pkg-config libuv --cflags` -fPIC -DSOURCE_LOCATION='"'`pwd`'"'
+LDFLAGS+=$(OPT) $(call P,--libs) -lgit2 -ldl
+CFLAGS+=$(OPT) $(call P,--cflags) -fPIC -DSOURCE_LOCATION='"'`pwd`'"'
 all: index_reader server client
 libautocommit.a: activity.o check.o net.o repo.o hooks.o
 	ar crs $@ $^
