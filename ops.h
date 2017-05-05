@@ -1,6 +1,8 @@
 enum operations { ADD, QUIT, INFO };
 
 #include <unistd.h> // pid_t
+#include <time.h> // time_t
+
 
 struct info_message {
 	pid_t pid;
@@ -8,4 +10,4 @@ struct info_message {
 	size_t characters;
 	size_t words;
 	time_t next_commit;
-}
+};

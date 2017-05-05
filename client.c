@@ -222,7 +222,7 @@ int main(int argc, char *argv[])
 			}
 
 			if(quitting) exit(0);
-			if(checking) {
+			if(checking && NULL == getenv("start")) {
 				fprintf(message, "Server not running.\n");
 				exit(1);
 			}

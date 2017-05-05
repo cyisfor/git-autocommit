@@ -34,6 +34,17 @@ struct check_context {
 	char* buf;
 };
 
+
+// this should be global, so that it doesn't commit several times one for each connection,
+// and so that it doesn't abort committing if a connection dies
+struct commit_info {
+	uv_timer_t committer;
+	time_t next_commit;
+	i32 lines;
+	i32 words;
+	i32 characters;
+} ci = {};
+
 #define BLOCKSIZE 512
 
 typedef struct check_context *CC;
@@ -102,7 +113,10 @@ static void on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
 		case INFO:
 		{
 			pid_t pid = getpid();
-			uv_buf_t buf = { (char*)&pid, sizeof(pid) };
+			struct info_message im = {
+				pid, ci.lines, ci.words, ci.characters, ci.next_commit
+			};
+			uv_buf_t buf = { (char*)&im, sizeof(im) };
 			uv_write_t* req = malloc(sizeof(uv_write_t));
 			uv_write(req, stream, &buf, 1, (void*)free);
 		}
@@ -341,16 +355,6 @@ static void commit_now(CC ctx, i32 lines, i32 words, i32 characters) {
 
 	HOOK_RUN("post-commit");
 }
-
-// this should be global, so that it doesn't commit several times one for each connection,
-// and so that it doesn't abort committing if a connection dies
-struct commit_info {
-	uv_timer_t committer;
-	time_t next_commit;
-	i32 lines;
-	i32 words;
-	i32 characters;
-} ci = {};
 
 void check_init(void) {
 	uv_timer_init(uv_default_loop(), &ci.committer);
