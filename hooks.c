@@ -128,6 +128,11 @@ static struct hook* new_hook(const char* name, size_t nlen) {
 	struct hook* load_so() {
 		void* dll = dlopen(so,RTLD_LAZY | RTLD_LOCAL);
 		assert(dll);
+		const char* e = dlerror();
+		if(e != NULL) {
+			error(23,0,e);
+			abort();
+		}
 		typedef void* (*initter)(void);
 		initter init = (initter) dlsym(dll,"init");
 		init_hook();

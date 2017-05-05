@@ -255,9 +255,9 @@ int main(int argc, char *argv[])
 				setuplog();
 
 				int watcher = fork();
-				if(watcher > 0) {
-					// call check_run directly, instead of wasting time with execve
-					check_run(sock);
+				if(watcher == 0) {
+					// call check_init directly, instead of wasting time with execve
+					check_init(sock);
 					// already started out uv_run in the parent process
 					return;
 				}

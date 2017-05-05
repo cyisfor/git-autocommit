@@ -356,10 +356,6 @@ static void commit_now(CC ctx, i32 lines, i32 words, i32 characters) {
 	HOOK_RUN("post-commit");
 }
 
-void check_init(void) {
-	uv_timer_init(uv_default_loop(), &ci.committer);
-}
-
 static void commit_later(uv_timer_t* handle) {
 	commit_now((CC)handle->data, ci.lines, ci.words, ci.characters);
 }
@@ -435,8 +431,9 @@ static void maybe_commit(CC ctx, i32 lines, i32 words, i32 characters) {
 	}
 }
 
-void check_run(int sock) {
-	check_init();
+void check_init(int sock) {
+	uv_timer_init(uv_default_loop(), &ci.committer);
+
 	activity_init();
 	hooks_init();
 	
@@ -445,5 +442,4 @@ void check_run(int sock) {
 	assert(0==uv_pipe_open(&server, sock));
 	
 	uv_listen((uv_stream_t*)&server, 0x10, on_accept);
-	uv_run(uv_default_loop(), UV_RUN_DEFAULT);
 }

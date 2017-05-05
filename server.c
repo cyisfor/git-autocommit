@@ -3,6 +3,9 @@
 #include "repo.h"
 #include "net.h"
 
+#include <uv.h>
+
+
 #include <assert.h>
 #include <unistd.h> // getcwd
 #include <sys/socket.h>
@@ -20,14 +23,17 @@ int main(int argc, char *argv[])
 	} else {
 		assert(0 == repo_init(argv[1]));
 	}
-
 	// no overflow why?
 	strcpy(argv[0], "autocommit server (standalone)");
 	prctl(PR_SET_NAME, "autocommit server (standalone)", 0, 0, 0);
 	net_set_addr();
 	int sock = net_bind();
 	if(sock == -1) exit(1);
+#if 0
 
-	check_run(sock);
+	check_init(sock);
+#endif
+	uv_run(uv_default_loop(), UV_RUN_DEFAULT);
+
 	return 0;
 }
