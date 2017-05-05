@@ -257,9 +257,9 @@ int main(int argc, char *argv[])
 				int watcher = fork();
 				if(watcher > 0) {
 					// call check_run directly, instead of wasting time with execve
-
 					check_run(sock);
-					exit(0);
+					// already started out uv_run in the parent process
+					return;
 				}
 				assert(watcher>0);
 				printf("AC: watching PID %d\n",watcher);
