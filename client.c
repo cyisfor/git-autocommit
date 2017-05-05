@@ -161,13 +161,18 @@ int main(int argc, char *argv[])
 	void get_reply(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
 		uv_timer_stop(&trying);
 		if(op == INFO) {
-			if(nread != sizeof(pid_t)) {
+			if(nread != sizeof(struct info_message)) {
 				kill_remote(stream, nread);
 				return;
 			}
-			pid_t pid = *((pid_t*)buf->base);
+			struct info_message* im = (struct info_message*)buf->base;
 			
-			fprintf(message, "Server PID: %ld %ld\n",pid, net_pid(sock));
+			fprintf(message, "Server Info: pid %ld (%ld)\n"
+							"Lines %lu Words %lu Characters %lu\n"
+							"Next commit: %lu (in %d)\n",
+							im->pid, net_pid(sock),
+							im->lines, im->words, im->characters,
+							im->next_commit, time(NULL) - im->next_commit);
 			uv_read_stop(stream);
 		} else {
 			if(nread == 0) return;

@@ -2,8 +2,6 @@ enum operations { ADD, QUIT, INFO };
 
 #include <unistd.h> // pid_t
 
-
-
 struct info_message {
 	pid_t pid;
 	size_t lines;
