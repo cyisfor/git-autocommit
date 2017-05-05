@@ -172,7 +172,8 @@ int main(int argc, char *argv[])
 							"Next commit: %lu (in %d)\n",
 							im->pid, net_pid(sock),
 							im->lines, im->words, im->characters,
-							im->next_commit, time(NULL) - im->next_commit);
+							im->next_commit, im->next_commit - time(NULL));
+			
 			uv_read_stop(stream);
 		} else {
 			if(nread == 0) return;
