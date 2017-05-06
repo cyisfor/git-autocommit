@@ -259,7 +259,7 @@ int main(int argc, char *argv[])
 
 				int watcher = fork();
 				if(watcher == 0) {
-					kill(getpid(),SIGSTOP);
+					//kill(getpid(),SIGSTOP);
 
 					// call check_init directly, instead of wasting time with execve
 					check_init(sock);
@@ -285,6 +285,7 @@ int main(int argc, char *argv[])
 				} else if(WIFSIGNALED(res)) {
 					printf("AC watcher: %d server died with signal %d\n",watcher,WTERMSIG(res));
 				}
+				exit(0);
 			}
 			fprintf(message,"AC: starting server %d\n",pid);
 			net_forkhack(pid);
