@@ -43,6 +43,12 @@ static void onchld(int sig) {
 			if(cur->pid == pid) {
 				// not safe to free async until it is received
 				uv_async_send(cur->async);
+				if(cur->next) {
+					cur->next->prev = cur->prev;
+				}
+				if(cur->prev) {
+					cur->prev->next = cur->next;
+				}
 				free(cur);
 			}
 			cur = cur->next;
@@ -58,6 +64,14 @@ void checkpid_after(int pid, uv_async_t* async) {
 	a->prev = NULL;
 	afters->prev = a;
 	afters = a;
+	if(pid == waitpid(pid,NULL,WNOHANG)) {
+		// then the sigchld handler gets invoked here
+		// but uv_async_send coalesces, so it's still only called once.
+		afters = afters->next;
+		afters->prev = NULL;
+		uv_async_send(a->async);
+		free(a);
+	}
 }
 
 void checkpid_init(void) {

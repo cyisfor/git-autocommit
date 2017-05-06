@@ -162,16 +162,29 @@ void hook_run(const char* name, const size_t nlen, uv_async_t* after) {
 	if(hook->islib) {
 		hook->u.run.f(hook->u.run.data, after);
 	} else {
+		// the PID cannot be allowed to exit before we get our after handler in the list
+		sem_t ready;
+		if(after)
+			assert0(sem_init(&ready, 1, 0));
+		
 		int pid = fork();
 		if(pid == 0) {
+			if(after) {
+				while(0 != sem_wait(&ready)) {
+					puts("ohpleaseohpleasedon'tdie");
+					sleep(1);
+				}
+			}
 			char* args[] = { hook->u.path };
 			execv(hook->u.path,args);
 			abort();
 		}
+		
+		checkpid(pid, "hook %s", name);
 		if(after) {
 			checkpid_after(pid, after);
+			sem_post(&ready);
 		}
-		checkpid(pid, "hook %s", name);
 		// this won't wait, so we can still do stuff
 	}
 }
