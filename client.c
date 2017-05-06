@@ -11,7 +11,6 @@
 
 #include <setjmp.h>
 
-
 #include <stdlib.h> // exit
 #include <assert.h>
 #include <string.h> // strlen
@@ -25,7 +24,6 @@
 #include <error.h> // 
 #include <sys/prctl.h>
 #include <stdio.h>
-
 
 int open_home(void) {
 	const char* path = getenv("HOME");
@@ -55,7 +53,8 @@ void move_to(int loc, ...) {
 
 typedef uint16_t u16;
 
-void setuplog(void) {	
+void setuplog(void) {
+	if(NULL != getenv("ferrets")) return;
 	int logloc = open_home();
 	move_to(logloc, ".local", "logs", NULL);
 
