@@ -45,6 +45,7 @@ static void onchld(int sig) {
 				uv_async_send(cur->async);
 				free(cur);
 			}
+			cur = cur->next;
 		}
 	}
 }

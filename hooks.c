@@ -14,11 +14,7 @@
 #include <error.h>
 #include <errno.h>
 
-
 #define LITLEN(s) s,sizeof(s)-1
-
-
-typedef void (*runner)(void*);
 
 typedef struct buf {
 	char* base;
@@ -164,9 +160,7 @@ void hook_run(const char* name, const size_t nlen, uv_async_t* after) {
 	struct hook* hook = hooks+i;
 
 	if(hook->islib) {
-		hook->u.run.f(hook->u.run.data);
-		if(after)
-			uv_async_send(after);
+		hook->u.run.f(hook->u.run.data, after);
 	} else {
 		int pid = fork();
 		if(pid == 0) {
