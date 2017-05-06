@@ -21,6 +21,8 @@
 #include <sys/stat.h> // mkdir
 #include <error.h> // 
 #include <sys/prctl.h>
+#include <stdio.h>
+
 
 int open_home(void) {
 	const char* path = getenv("HOME");
@@ -256,6 +258,9 @@ int main(int argc, char *argv[])
 
 				int watcher = fork();
 				if(watcher == 0) {
+
+					kill(getpid(),SIGSTOP);
+
 					// call check_init directly, instead of wasting time with execve
 					check_init(sock);
 					// already started out uv_run in the parent process

@@ -5,7 +5,6 @@
 
 #include <uv.h>
 
-
 #include <assert.h>
 #include <unistd.h> // getcwd
 #include <sys/socket.h>
