@@ -148,7 +148,7 @@ static void load(const char* name, size_t nlen) {
 	abort(); // nuever 
 }
 
-void hook_run(const char* name, const size_t nlen) {
+void hook_run(const char* name, const size_t nlen, void (*after)(void*), void* udata) {
 	size_t i = 0;
 	for(;i<nhooks;++i) {
 		if(hooks[i].name.len == nlen &&
@@ -161,12 +161,16 @@ void hook_run(const char* name, const size_t nlen) {
 
 	if(hook->islib) {
 		hook->u.run.f(hook->u.run.data);
+		if(after) after(udata);
 	} else {
 		int pid = fork();
 		if(pid == 0) {
 			char* args[] = { hook->u.path };
 			execv(hook->u.path,args);
 			abort();
+		}
+		if(after) {
+			checkpid_after(pid, after,udata);
 		}
 		checkpid(pid, "hook %s", name);
 		// this won't wait, so we can still do stuff

@@ -6,6 +6,15 @@
 #include <stdarg.h> // va_*
 #include <sys/wait.h> // waitpid
 
+struct after {
+	int pid;
+	uv_async_t* async;
+	struct after* prev;
+	struct after* next;
+};
+
+struct after* afters;
+
 static void onchld(int sig) {
 	int pid;
 	int status;
@@ -28,7 +37,26 @@ static void onchld(int sig) {
 		} else {
 			erra("whu? %d",status);
 		}
+
+		struct after* cur = afters;
+		while(cur) {
+			if(cur->pid == pid) {
+				// not safe to free async until it is received
+				uv_async_send(cur->async);
+				free(cur);
+			}
+		}
 	}
+}
+
+void checkpid_after(int pid, uv_async_t* async) {
+	struct after* a = malloc(sizeof(struct after));
+	a->pid = pid;
+	a->async = async;
+	a->next = afters;
+	a->prev = NULL;
+	afters->prev = a;
+	afters = a;
 }
 
 void checkpid_init(void) {
