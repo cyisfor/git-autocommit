@@ -283,11 +283,9 @@ static void queue_commit(CC ctx) {
 	maybe_commit(ctx, lines, words, characters);
 }
 
+static void post_pre_commit(uv_async_t* handle);
 
-static void commit_now(CC ctx, i32 lines, i32 words, i32 characters) {
-	git_signature *me = NULL;
-	git_index* idx = NULL;
-	git_diff* diff;
+static void commit_now(CC ctx) {
 	int changes = 0;
 	int check(const char *path, unsigned int status_flags, void *payload) {
 		++changes;
@@ -304,8 +302,20 @@ static void commit_now(CC ctx, i32 lines, i32 words, i32 characters) {
 		return;
 	}
 
-	HOOK_RUN("pre-commit",1);
+	uv_async_t* async = malloc(sizeof(uv_async_t));
+	async->data = ctx;
+	uv_async_init(uv_default_loop(), async, post_pre_commit);
+	HOOK_RUN("pre-commit",async);
+	// now-ish
+}
+
+static void post_pre_commit(uv_async_t* handle) {
+	CC ctx = (CC)handle->data;
+	free(handle);
 	
+	git_index* idx = NULL;
+	git_signature *me = NULL;
+
 	repo_check(git_repository_index(&idx, repo));
 
 	repo_check(git_signature_now(&me, "autocommit", "autocommit"));
@@ -313,7 +323,7 @@ static void commit_now(CC ctx, i32 lines, i32 words, i32 characters) {
 	// why add an arbitrary path to the git log, whatever happened to have been saved
 	// back when the timer was started?
 	ssize_t amt = snprintf(message,0x1000,"auto %lu %lu %lu",
-												 lines, words, characters);
+												 ci.lines, ci.words, ci.characters);
 	write(1, "AC: ",4);
 	write(1, message,amt); // stdout fileno in a weird place to stop unexpected output
 	write(1, " ",1);
@@ -352,11 +362,11 @@ static void commit_now(CC ctx, i32 lines, i32 words, i32 characters) {
 	git_tree_free(tree);
 	git_signature_free(me);
 
-	HOOK_RUN("post-commit",0);
+	HOOK_RUN("post-commit",NULL);
 }
 
 static void commit_later(uv_timer_t* handle) {
-	commit_now((CC)handle->data, ci.lines, ci.words, ci.characters);
+	commit_now((CC)handle->data);
 }
 
 static void maybe_commit(CC ctx, i32 lines, i32 words, i32 characters) {
