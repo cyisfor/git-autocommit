@@ -304,7 +304,7 @@ static void commit_now(CC ctx, i32 lines, i32 words, i32 characters) {
 		return;
 	}
 
-	HOOK_RUN("pre-commit");
+	HOOK_RUN("pre-commit",1);
 	
 	repo_check(git_repository_index(&idx, repo));
 
@@ -352,7 +352,7 @@ static void commit_now(CC ctx, i32 lines, i32 words, i32 characters) {
 	git_tree_free(tree);
 	git_signature_free(me);
 
-	HOOK_RUN("post-commit");
+	HOOK_RUN("post-commit",0);
 }
 
 static void commit_later(uv_timer_t* handle) {

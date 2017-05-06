@@ -148,7 +148,7 @@ static void load(const char* name, size_t nlen) {
 	abort(); // nuever 
 }
 
-void hook_run(const char* name, const size_t nlen, void (*after)(void*), void* udata) {
+void hook_run(const char* name, const size_t nlen, uv_async_t* after) {
 	size_t i = 0;
 	for(;i<nhooks;++i) {
 		if(hooks[i].name.len == nlen &&
@@ -170,7 +170,7 @@ void hook_run(const char* name, const size_t nlen, void (*after)(void*), void* u
 			abort();
 		}
 		if(after) {
-			checkpid_after(pid, after,udata);
+			checkpid_after(pid, after);
 		}
 		checkpid(pid, "hook %s", name);
 		// this won't wait, so we can still do stuff
