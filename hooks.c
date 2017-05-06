@@ -156,12 +156,17 @@ void hook_run(const char* name, const size_t nlen, uv_async_t* after) {
 			break;
 		}
 	}
-	if(i == nhooks) return;
+	if(i == nhooks) {
+		// no hook
+		if(after) uv_async_send(after);
+		return;
+	}
 	struct hook* hook = hooks+i;
 
 	if(hook->islib) {
 		hook->u.run.f(hook->u.run.data);
-		if(after) after(udata);
+		if(after)
+			uv_async_send(after);
 	} else {
 		int pid = fork();
 		if(pid == 0) {
