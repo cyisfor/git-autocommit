@@ -287,7 +287,7 @@ int main(int argc, char *argv[])
 				int watcher = fork();
 				if(watcher == 0) {
 					//kill(getpid(),SIGSTOP);
-
+					uv_timer_stop(&trying);
 					// call check_init directly, instead of wasting time with execve
 					check_init(sock);
 
@@ -296,6 +296,7 @@ int main(int argc, char *argv[])
 					// forget about longjmp that's just for the watcher process
 					return;
 				}
+				close(sock);
 				longjmp(start_watcher, watcher);
 				abort();
 			}

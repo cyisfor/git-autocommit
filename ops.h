@@ -7,7 +7,7 @@ enum operations { ADD, QUIT, INFO };
 struct info_message {
 	pid_t pid;
 	size_t lines;
-	size_t characters;
 	size_t words;
+	size_t characters;
 	time_t next_commit;
 };
