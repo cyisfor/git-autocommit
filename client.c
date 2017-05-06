@@ -9,6 +9,9 @@
 #include <sys/socket.h> // 
 #include <sys/un.h> // 
 
+#include <setjmp.h>
+
+
 #include <stdlib.h> // exit
 #include <assert.h>
 #include <string.h> // strlen
@@ -67,9 +70,34 @@ void setuplog(void) {
 
 int main(int argc, char *argv[])
 {
-	// first arg = name of file that was saved
+	// env "file" = name of file that was saved
 
-	FILE* message = stdout;
+	int server_pid = -1;
+	jmp_buf start_watcher;
+	
+	if(0 != (server_pid = setjmp(start_watcher))) {
+		// keep our retarded watcher nice and retardedly simple,
+		// with no uv_loop hanging out there.
+		assert(server_pid>0);
+		printf("AC: watching PID %d\n",server_pid);
+		void onsig(int signal) {
+			kill(server_pid,signal);
+			exit(signal);
+		}
+		signal(SIGTERM,onsig);
+		signal(SIGINT,onsig);
+		signal(SIGQUIT,onsig);
+		int res;
+		waitpid(server_pid,&res,0);
+		if(WIFEXITED(res)) {
+			if(0 != WEXITSTATUS(res)) {
+				printf("AC watcher: %d server exited with %d\n",server_pid,WEXITSTATUS(res));
+			}
+		} else if(WIFSIGNALED(res)) {
+			printf("AC watcher: %d server died with signal %d\n",server_pid,WTERMSIG(res));
+		}
+		exit(0);
+	}
 
 	// now everything written to "message" goes to stdout (emacs)
 	// while stdout/err goes to a log
@@ -77,9 +105,9 @@ int main(int argc, char *argv[])
 	void bye(const char* fmt, ...) {
 		va_list args;
 		va_start(args,fmt);
-		vfprintf(message, fmt, args);
+		vfprintf(stderr, fmt, args);
 		va_end(args);
-		fputc('\n',message);
+		fputc('\n',stderr);
 		exit(23);
 	}
 
@@ -143,14 +171,14 @@ int main(int argc, char *argv[])
 	void restart_when_closed(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
 		if(nread > 0) return;
 		if(nread != UV_ECONNRESET && nread != UV_EOF) {
-			fprintf(message, "um %s\n",uv_strerror(nread));
+			printf("um %s\n",uv_strerror(nread));
 			abort();
 		}
 		uv_close((uv_handle_t*)stream, (void*)csucks);
 	}
 
 	void kill_remote(uv_stream_t* stream, ssize_t err) {
-		fprintf(message, "Killing remote... %s %d %d\n",uv_strerror(err), err, net_pid(sock));
+		printf("Killing remote... %s %d %d\n",uv_strerror(err), err, net_pid(sock));
 		uv_read_stop(stream);
 		if(err != UV_ECONNRESET) {
 			uv_read_start(stream, &alloc_cb, restart_when_closed);
@@ -169,7 +197,7 @@ int main(int argc, char *argv[])
 			}
 			struct info_message* im = (struct info_message*)buf->base;
 			
-			fprintf(message, "Server Info: pid %ld (%ld)\n"
+			printf("Server Info: pid %ld (%ld)\n"
 							"Lines %lu Words %lu Characters %lu\n"
 							"Next commit: %lu (in %d)\n",
 							im->pid, net_pid(sock),
@@ -190,7 +218,7 @@ int main(int argc, char *argv[])
 				uv_read_stop(stream);
 				break;
 			default:
-				fprintf(message, "Got weirdness %d\n",res);
+				printf("Got weirdness %d\n",res);
 				abort();
 			};
 		}
@@ -220,25 +248,25 @@ int main(int argc, char *argv[])
 		sock = net_connect();
 		if(sock == -1) {
 			if(++tries > 3) {
-				fprintf(message,"Couldn't spawn server %d\n",tries);
+				printf("Couldn't spawn server %d\n",tries);
 				abort();
 			}
 
 			if(quitting) exit(0);
 			if(checking && NULL == getenv("start")) {
-				fprintf(message, "Server not running.\n");
+				printf("Server not running.\n");
 				exit(1);
 			}
 			
 			// try to bind
 			sock = net_bind();
 			if(sock <= 0) return; // already bound, hopefully
-			fprintf(message, "Got socket %d\n",sock);
+			printf("Got socket %d\n",sock);
 
 			// we got it. start the server
-			int pid = fork();
-			assert(pid >= 0);
-			if(pid == 0) {
+			int server_pid = fork();
+			assert(server_pid >= 0);
+			if(server_pid == 0) {
 				setsid();
 
 				// no overflow why?
@@ -265,30 +293,15 @@ int main(int argc, char *argv[])
 					check_init(sock);
 
 					// already started out uv_run in the parent process
+					// now we're the server, so just go back to the loop
+					// forget about longjmp that's just for the watcher process
 					return;
 				}
-				assert(watcher>0);
-				printf("AC: watching PID %d\n",watcher);
-				void onsig(int signal) {
-					kill(watcher,signal);
-					exit(signal);
-				}
-				signal(SIGTERM,onsig);
-				signal(SIGINT,onsig);
-				signal(SIGQUIT,onsig);
-				int res;
-				waitpid(watcher,&res,0);
-				if(WIFEXITED(res)) {
-					if(0 != WEXITSTATUS(res)) {
-						printf("AC watcher: %d server exited with %d\n",watcher,WEXITSTATUS(res));
-					}
-				} else if(WIFSIGNALED(res)) {
-					printf("AC watcher: %d server died with signal %d\n",watcher,WTERMSIG(res));
-				}
-				exit(0);
+				longjmp(start_watcher, watcher);
+				abort();
 			}
-			fprintf(message,"AC: starting server %d\n",pid);
-			net_forkhack(pid);
+			printf("AC: starting server %d\n",server_pid);
+			net_forkhack(server_pid);
 			close(sock); // XXX: could we finagle this socket into a connected one without closing it?
 			try_connect(); // we should be able to connect right away since listen() already called
 		} else {
@@ -296,7 +309,7 @@ int main(int argc, char *argv[])
 			if(res == 0) {
 				on_connect();
 			} else {
-				fprintf(message, "um %s\n",uv_strerror(res));
+				printf("um %s\n",uv_strerror(res));
 				close(sock);
 			}
 		}

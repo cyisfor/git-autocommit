@@ -1,12 +1,12 @@
 #include "repo.h"
 #include "hooks.h"
 #include "myassert.h"
+#include "checkpid.h"
 
 #include <dlfcn.h> // dlopen, dlsym
 #include <unistd.h> // fork, exec*
 #include <stdarg.h> // va_*
 #include <stdio.h>
-#include <sys/wait.h> // waitpid
 #include <stdbool.h>
 #include <string.h> // memcmp
 #include <limits.h> // PATH_MAX
@@ -17,34 +17,6 @@
 
 #define LITLEN(s) s,sizeof(s)-1
 
-static void checkpid(int pid, char* fmt, ...) {
-	va_list arg;
-	va_start(arg, fmt);
-	void erra(const char* fmt2, ...) {
-		vfprintf(stderr,fmt, arg);
-		va_end(arg);
-		va_start(arg, fmt2);
-		fputc(' ',stderr);
-		vfprintf(stderr,fmt2,arg);
-		fputc('\n',stderr);
-		abort();
-	}
-	if(pid < 0) {
-		erra("bad pid %d",pid);
-	}
-	int status;
-	if(-1 == waitpid(pid, &status, 0)) {
-		error(errno,errno,"couldn't wait?");
-	}
-	if(WIFSIGNALED(status)) {
-		erra("died with signal %d",WTERMSIG(status));
-	} else if(WIFEXITED(status)) {
-		int res = WEXITSTATUS(status);
-		if(res != 0) {
-			erra("exited with %d",res);
-		}
-	}
-}
 
 typedef void (*runner)(void*);
 
@@ -118,7 +90,7 @@ static void load(const char* name, size_t nlen) {
 			};
 			execvp(cc,args);
 		}
-		checkpid(pid, "gcc died building %s",name);
+		checkpid(pid, "gcc %s",name);
 	}
 
 	struct hook* hook = NULL;
@@ -196,19 +168,8 @@ void hook_run(const char* name, const size_t nlen) {
 			execv(hook->u.path,args);
 			abort();
 		}
-		assert_gt(0,pid);
-		int status;
-		if(-1 == waitpid(pid, &status, 0)) {
-			error(errno,errno,"couldn't wait?");
-		}
-		if(WIFSIGNALED(status)) {
-			error(WTERMSIG(status),0,"%s hook died with signal %d",name,WTERMSIG(status));
-		} else if(WIFEXITED(status)) {
-			int res = WEXITSTATUS(status);
-			if(res != 0) {
-				error(res,0,"%s hook exited with %d",name,res);
-			}
-		}
+		checkpid(pid, "hook %s", name);
+		// this won't wait, so we can still do stuff
 	}
 }
 
@@ -220,4 +181,5 @@ void hooks_init(void) {
 	load(LITLEN("pre-commit"));
 	load(LITLEN("post-commit"));
 	assert0(chdir(git_repository_workdir(repo)));
+	checkpid_init();
 }
