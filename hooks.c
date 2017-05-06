@@ -2,7 +2,6 @@
 #include "hooks.h"
 #include "myassert.h"
 
-#include <search.h> // tfind, tsearch
 #include <dlfcn.h> // dlopen, dlsym
 #include <unistd.h> // fork, exec*
 #include <stdarg.h> // va_*
@@ -77,7 +76,12 @@ struct hook {
 #define PLUGIN_FLAGS "-g", "-O2",
 #endif
 
-static struct hook* new_hook(const char* name, size_t nlen) {
+// tsearch is too opaque... can't debug problems!
+// this is a tiny array anyway
+static struct hook* hooks = NULL;
+size_t nhooks = 0;
+
+static void load(const char* name, size_t nlen) {
 	char csource[0x100];
 	memcpy(csource,name,nlen);
 	size_t len = nlen;
@@ -116,16 +120,18 @@ static struct hook* new_hook(const char* name, size_t nlen) {
 		}
 		checkpid(pid, "gcc died building %s",name);
 	}
-	struct hook* hook = NULL;
 
+	struct hook* hook = NULL;
 	void init_hook(void) {
-			hook = malloc(sizeof(struct hook));
+			hooks = realloc(hooks,sizeof(struct hook) * (nhooks+1));
+			hook = hooks + nhooks;
+			++nhooks;
 			hook->name.base = malloc(nlen); // sigh
 			memcpy(hook->name.base,name,nlen);
 			hook->name.len = nlen;
 	}
 
-	struct hook* load_so() {
+	void load_so() {
 		void* dll = dlopen(so,RTLD_LAZY | RTLD_LOCAL);
 		assert(dll);
 		const char* e = dlerror();
@@ -141,7 +147,7 @@ static struct hook* new_hook(const char* name, size_t nlen) {
 		}
 		hook->u.run.f = (runner) dlsym(dll,"run");
 		hook->islib = true;
-		return hook;
+		return;
 	}
 
 	struct stat cstat, sostat;
@@ -161,25 +167,25 @@ static struct hook* new_hook(const char* name, size_t nlen) {
 			init_hook();
 			hook->islib = false;
 			assert(realpath(name,hook->u.path));
-			return hook;
+			return;
 		} else {
-			return NULL;
+			return;
 			// no hook for this name exists
 		}
 	}
 	abort(); // nuever 
 }
 
-static void* hooks = NULL;
-
 void hook_run(const char* name, const size_t nlen) {
-	const struct hook search = {
-		name: { name, nlen }
-	};
-	struct hook* hook = *((struct hook**)tfind(&search, &hooks, (void*)compare));
-	if(!hook) {
-		return;
+	size_t i = 0;
+	for(;i<nhooks;++i) {
+		if(hooks[i].name.len == nlen &&
+			 0==memcmp(hooks[i].name.base,name,nlen)) {
+			break;
+		}
 	}
+	if(i == nhooks) return;
+	struct hook* hook = hooks+i;
 
 	if(hook->islib) {
 		hook->u.run.f(hook->u.run.data);
@@ -204,12 +210,6 @@ void hook_run(const char* name, const size_t nlen) {
 			}
 		}
 	}
-}
-
-static void load(const char* name, const size_t nlen) {
-	struct hook* hook = new_hook(name,nlen);
-	if(hook) 
-		tsearch((void*) hook, &hooks, (void*)compare);
 }
 
 void hooks_init(void) {

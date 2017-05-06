@@ -242,7 +242,8 @@ int main(int argc, char *argv[])
 				setsid();
 
 				// no overflow why?
-				strcpy(argv[0], "autocommit server");
+#define LITLEN(l) l, sizeof(l)-1
+				memcpy(argv[0], LITLEN("autocommit server\0"));
 				prctl(PR_SET_NAME, "autocommit server", 0, 0, 0);
 				
 /*				dup2(sock,3);
@@ -258,11 +259,11 @@ int main(int argc, char *argv[])
 
 				int watcher = fork();
 				if(watcher == 0) {
-
 					kill(getpid(),SIGSTOP);
 
 					// call check_init directly, instead of wasting time with execve
 					check_init(sock);
+
 					// already started out uv_run in the parent process
 					return;
 				}
