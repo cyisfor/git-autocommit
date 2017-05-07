@@ -1,6 +1,6 @@
 P=$(shell env PKG_CONFIG_PATH=/custom/libuv/lib/pkgconfig pkg-config libuv $1)
 OPT=-g -O2
-LDFLAGS+=$(OPT) $(call P,--libs) -lgit2 -ldl -rdynamic
+LDFLAGS+=$(OPT) $(call P,--libs) -lgit2 -ldl -rdynamic -Wl,-rpath=/custom/libuv/lib/
 # -rdynamic makes things like checkpid() available to hooks, instead of
 # undefined symbol: checkpid
 CFLAGS+=$(OPT) $(call P,--cflags) -fPIC -DSOURCE_LOCATION='"'`pwd`'"'
