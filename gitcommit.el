@@ -16,7 +16,7 @@
 	(setenv "file" (buffer-file-name))
 	(start-process "Git Commit Thingy"
 				   buffer
-				   (expand-file-name "~/code/git/maybecommit.py"))
+				   (expand-file-name "~/code/git/autocommit/client"))
 	(setenv "file")))
 
 (defun gitcommit-enhooken ()
