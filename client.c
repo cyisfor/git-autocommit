@@ -177,7 +177,7 @@ int main(int argc, char *argv[])
 	}
 
 	void kill_remote(uv_stream_t* stream, ssize_t err) {
-		printf("Killing remote... %s %d %d\n",uv_strerror(err), err, net_pid(sock));
+		printf("Killing remote... %s %ld %d\n",uv_strerror(err), err, net_pid(sock));
 		uv_read_stop(stream);
 		if(err != UV_ECONNRESET) {
 			uv_read_start(stream, &alloc_cb, restart_when_closed);
@@ -196,9 +196,9 @@ int main(int argc, char *argv[])
 			}
 			struct info_message* im = (struct info_message*)buf->base;
 			
-			printf("Server Info: pid %ld (%ld)\n"
+			printf("Server Info: pid %d (%d)\n"
 							"Lines %lu Words %lu Characters %lu\n"
-							"Next commit: %lu (in %d)\n",
+							"Next commit: %lu (in %ld)\n",
 							im->pid, net_pid(sock),
 							im->lines, im->words, im->characters,
 							im->next_commit, im->next_commit - time(NULL));
