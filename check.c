@@ -222,7 +222,7 @@ static void queue_commit(CC ctx) {
 					inword = 0;
 					if(lastw + 1 < j) {
 						void commit(void) {
-							printf("word: %d %d ",lastw,j);
+							//printf("word: %d %d ",lastw,j);
 							fwrite(l+lastw,j-lastw,1,stdout);
 							fputc('\n',stdout);
 							
@@ -277,7 +277,8 @@ static void queue_commit(CC ctx) {
 		return 0;
 	}
 	
-
+	char buf[256];
+	write(1, buf,snprintf(buf,0x200,"checking lwc %d %d %d\n",lines,words,characters)); 
 	repo_check(git_diff_foreach(diff, on_file, NULL, NULL, on_line, NULL));
 	git_diff_free(diff);
 	maybe_commit(ctx, lines, words, characters);
@@ -297,7 +298,7 @@ static void commit_now(CC ctx) {
 	
 	if(0 == changes) {
 		#define LITLEN(s) s, (sizeof(s)-1)
-		write(1,LITLEN("AC: no empty commits please.\n"));
+		write(1,LITLEN("no empty commits please.\n"));
 		// no empty commits, please
 		return;
 	}
@@ -324,7 +325,6 @@ static void post_pre_commit(uv_async_t* handle) {
 	// back when the timer was started?
 	ssize_t amt = snprintf(message,0x1000,"auto %lu %lu %lu",
 												 ci.lines, ci.words, ci.characters);
-	write(1, "AC: ",4);
 	write(1, message,amt); // stdout fileno in a weird place to stop unexpected output
 	write(1, " ",1);
 
@@ -430,7 +430,7 @@ static void maybe_commit(CC ctx, i32 lines, i32 words, i32 characters) {
 	if(ci.next_commit == 0 || now + d < ci.next_commit) {
 		// keep pushing the timer back, so we commit sooner if more changes
 		char buf[0x200];
-		write(1,buf,snprintf(buf,0x200,"AC: waiting %.2f\n",d)); // weird stdout fd
+		write(1,buf,snprintf(buf,0x200,"waiting %.2f\n",d)); // weird stdout fd
 		
 		uv_timer_stop(&ci.committer);
 		ci.next_commit = now + d;
