@@ -277,10 +277,11 @@ static void queue_commit(CC ctx) {
 		return 0;
 	}
 	
-	char buf[256];
-	write(1, buf,snprintf(buf,0x200,"checking lwc %d %d %d\n",lines,words,characters)); 
 	repo_check(git_diff_foreach(diff, on_file, NULL, NULL, on_line, NULL));
 	git_diff_free(diff);
+	{ char buf[256];
+		write(1, buf,snprintf(buf,0x200,"checking lwc %d %d %d\n",lines,words,characters));
+	}
 	maybe_commit(ctx, lines, words, characters);
 }
 
