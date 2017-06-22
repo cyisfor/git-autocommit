@@ -222,7 +222,7 @@ static void queue_commit(CC ctx) {
 					inword = 0;
 					if(lastw + 1 < j) {
 						void commit(void) {
-							printf("word: %d %d ",lastw,j);
+							//printf("word: %d %d ",lastw,j);
 							fwrite(l+lastw,j-lastw,1,stdout);
 							fputc('\n',stdout);
 							
