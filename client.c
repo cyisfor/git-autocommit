@@ -78,7 +78,7 @@ int main(int argc, char *argv[])
 		// keep our retarded watcher nice and retardedly simple,
 		// with no uv_loop hanging out there.
 		assert(server_pid>0);
-		printf("AC: watching PID %d\n",server_pid);
+		printf("watching PID %d\n",server_pid);
 		void onsig(int signal) {
 			kill(server_pid,signal);
 			exit(signal);
@@ -90,10 +90,10 @@ int main(int argc, char *argv[])
 		waitpid(server_pid,&res,0);
 		if(WIFEXITED(res)) {
 			if(0 != WEXITSTATUS(res)) {
-				printf("AC watcher: %d server exited with %d\n",server_pid,WEXITSTATUS(res));
+				printf("watcher: %d server exited with %d\n",server_pid,WEXITSTATUS(res));
 			}
 		} else if(WIFSIGNALED(res)) {
-			printf("AC watcher: %d server died with signal %d\n",server_pid,WTERMSIG(res));
+			printf("watcher: %d server died with signal %d\n",server_pid,WTERMSIG(res));
 		}
 		exit(0);
 	}
@@ -136,7 +136,7 @@ int main(int argc, char *argv[])
 
 	if(op == ADD) {
 		// hissy fit......
-		// printf("path %s\n",path);
+		printf("path %s\n",path);
 		plen = repo_relative(&path, plen);
 		// printf("repo relative path %s\n",path);
 		repo_add(path);
@@ -300,7 +300,7 @@ int main(int argc, char *argv[])
 				longjmp(start_watcher, watcher);
 				abort();
 			}
-			printf("AC: starting server %d\n",server_pid);
+			printf("starting server %d\n",server_pid);
 			net_forkhack(server_pid);
 			close(sock); // XXX: could we finagle this socket into a connected one without closing it?
 			try_connect(); // we should be able to connect right away since listen() already called
