@@ -223,8 +223,8 @@ static void queue_commit(CC ctx) {
 					if(lastw + 1 < j) {
 						void commit(void) {
 							//printf("word: %d %d ",lastw,j);
-							fwrite(l+lastw,j-lastw,1,stdout);
-							fputc('\n',stdout);
+							//fwrite(l+lastw,j-lastw,1,stdout);
+							//fputc('\n',stdout);
 							
 							if(wchars > 0) {
 								++words;
