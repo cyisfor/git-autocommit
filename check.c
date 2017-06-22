@@ -279,8 +279,8 @@ static void queue_commit(CC ctx) {
 	
 	repo_check(git_diff_foreach(diff, on_file, NULL, NULL, on_line, NULL));
 	git_diff_free(diff);
-	{ char buf[256];
-		write(1, buf,snprintf(buf,0x200,"checking lwc %d %d %d\n",lines,words,characters));
+	{ char buf[0x200];
+		write(1, buf, snprintf(buf,0x100,"checking lwc %d %d %d\n",lines,words,characters));
 	}
 	maybe_commit(ctx, lines, words, characters);
 }
