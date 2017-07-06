@@ -1,10 +1,11 @@
-P=$(shell pkg-config libuv $1)
+P=$(shell PKG_CONFIG_PATH=libuv pkg-config libuv $1)
 OPT=-g
-LDLIBS+=$(call P,--libs) -lgit2 -ldl 
+LDLIBS+=-lgit2 -ldl
+LDLIBS+=libuv/.libs/libuv.a #-lpthread
 LDFLAGS+=$(OPT) -rdynamic -pthread
 # -rdynamic makes things like checkpid() available to hooks, instead of
 # undefined symbol: checkpid
-CFLAGS+=$(OPT) $(call P,--cflags) -fPIC -DSOURCE_LOCATION='"'`pwd`'"'
+CFLAGS+=$(OPT) -Ilibuv/include/ -fPIC -DSOURCE_LOCATION='"'`pwd`'"'
 all: index_reader server client
 libautocommit.a: activity.o check.o net.o repo.o hooks.o checkpid.o
 	ar crs $@ $^
@@ -14,3 +15,13 @@ clean:
 	git clean -fdx
 
 index_reader: index_reader.o repo.o activity.o
+
+
+libuv/.libs/libuv.so: libuv/Makefile
+	$(MAKE) -C libuv
+
+libuv/Makefile: libuv/configure
+	cd libuv; ./configure
+
+libuv/configure: libuv/configure.ac
+	cd libuv; sh autogen.sh
