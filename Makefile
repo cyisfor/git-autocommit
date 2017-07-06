@@ -25,3 +25,6 @@ libuv/Makefile: libuv/configure
 
 libuv/configure: libuv/configure.ac
 	cd libuv; sh autogen.sh
+
+libuv/configure.ac:
+	git submodule add https://github.com/joyent/libuv.git 
