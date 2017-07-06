@@ -14,7 +14,7 @@ client: client.o libautocommit.a libuv/.libs/libuv.a
 clean:
 	git clean -fdx
 
-index_reader: index_reader.o repo.o activity.o
+index_reader: index_reader.o repo.o activity.o libuv/.libs/libuv.a
 
 
 libuv/.libs/libuv.a: libuv/Makefile
