@@ -1,5 +1,5 @@
 P=$(shell pkg-config libuv $1)
-OPT=-g -O2
+OPT=-g
 LDLIBS+=$(call P,--libs) -lgit2 -ldl 
 LDFLAGS+=$(OPT) -rdynamic -pthread
 # -rdynamic makes things like checkpid() available to hooks, instead of
