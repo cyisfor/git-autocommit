@@ -428,7 +428,7 @@ static void maybe_commit(CC ctx, i32 lines, i32 words, i32 characters) {
 	if(d >= 3600) return;
 	
 	time_t now = time(NULL);
-	if(ci.next_commit == 0 || now + d < ci.next_commit) {
+	if(ci.next_commit == 0 || now > ci.next_commit || now + d < ci.next_commit) {
 		// keep pushing the timer back, so we commit sooner if more changes
 		char buf[0x200];
 		write(1,buf,snprintf(buf,0x200,"waiting %.2f\n",d)); // weird stdout fd
