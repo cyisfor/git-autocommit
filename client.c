@@ -303,6 +303,7 @@ int main(int argc, char *argv[])
 			printf("starting server %d\n",server_pid);
 			net_forkhack(server_pid);
 			close(sock); // XXX: could we finagle this socket into a connected one without closing it?
+			usleep(100000); // XXX: mysterious race condition... activity on the client's sockets created AFTER the server is forked, are reported to the server process?
 			try_connect(); // we should be able to connect right away since listen() already called
 		} else {
 			int res = uv_pipe_open(&conn, sock);
