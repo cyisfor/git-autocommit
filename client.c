@@ -286,6 +286,15 @@ int main(int argc, char *argv[])
 
 				int watcher = fork();
 				if(watcher == 0) {
+					// this should be unneccessary...
+					char dest[PATH_MAX];
+					char* dir = dirname(argv[0]);
+					size_t alen = strlen(dir);
+					memcpy(dest,dir,alen);
+					memcpy(dest+alen-1,LITLEN("server"));
+					dest[alen+sizeof("server")-2] = '\0';
+					execl(dest,"autocommit server",NULL);
+					abort();
 					//kill(getpid(),SIGSTOP);
 					uv_timer_stop(&trying);
 					// call check_init directly, instead of wasting time with execve
