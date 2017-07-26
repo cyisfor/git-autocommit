@@ -10,7 +10,7 @@
 #include <sys/un.h> // 
 
 #include <setjmp.h>
-
+#include <libgen.h> // dirname
 #include <stdlib.h> // exit
 #include <assert.h>
 #include <string.h> // strlen
@@ -241,14 +241,21 @@ int main(int argc, char *argv[])
 		uv_write(&writing, (uv_stream_t*) &conn, &dest, 1, await_reply);
 	}
 
+	bool debugging_fork = getenv("debugfork") != NULL;
+
 	void try_connect(void) {
 		// uv_pipe_connect fails on abstract sockets
 		// https://github.com/joyent/libuv/issues/1486
 		sock = net_connect();
 		if(sock == -1) {
 			if(++tries > 3) {
-				printf("Couldn't spawn server %d\n",tries);
-				abort();
+				if(debugging_fork) {
+					sleep(3);
+					return try_connect();
+				} else {
+					printf("Couldn't spawn server %d\n",tries);
+					abort();
+				}
 			}
 
 			if(quitting) exit(0);
@@ -286,16 +293,31 @@ int main(int argc, char *argv[])
 
 				int watcher = fork();
 				if(watcher == 0) {
+#ifdef STUPIDLY_CAUTIOUS
 					// this should be unneccessary...
 					char dest[PATH_MAX];
-					char* dir = dirname(argv[0]);
+					const char* dir = dirname(argv[0]);
+					if(*dir == '\0') dir = ".";
 					size_t alen = strlen(dir);
 					memcpy(dest,dir,alen);
-					memcpy(dest+alen-1,LITLEN("server"));
-					dest[alen+sizeof("server")-2] = '\0';
+					dest[alen] = '/'; // +1?
+					memcpy(dest+alen,LITLEN("server"));
+					dest[alen+sizeof("server")-1] = '\0';
+					puts(dest);
 					execl(dest,"autocommit server",NULL);
 					abort();
-					//kill(getpid(),SIGSTOP);
+#endif
+					if(debugging_fork) {
+						int targetpid = getpid();
+						int gdb = fork();
+						if(gdb == 0) {
+							char buf[100];
+							snprintf(buf,100,"%d",targetpid);
+							execlp("xfce4-terminal","xterm","-e","gdb","-p",buf,NULL);
+							abort();
+						}
+						waitpid(gdb,NULL,0);
+					}
 					uv_timer_stop(&trying);
 					// call check_init directly, instead of wasting time with execve
 					check_init(sock);
