@@ -314,7 +314,7 @@ static void commit_now(CC ctx) {
 
 static void post_pre_commit(uv_async_t* handle) {
 	CC ctx = (CC)handle->data;
-	free(handle);
+	uv_close((uv_handle_t*) handle, (void(*)(uv_handle_t*))free);
 	
 	git_index* idx = NULL;
 	git_signature *me = NULL;
