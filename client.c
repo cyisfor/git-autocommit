@@ -294,20 +294,6 @@ int main(int argc, char *argv[])
 
 				int watcher = fork();
 				if(watcher == 0) {
-#ifdef STUPIDLY_CAUTIOUS
-					// this should be unneccessary...
-					char dest[PATH_MAX];
-					const char* dir = dirname(argv[0]);
-					if(*dir == '\0') dir = ".";
-					size_t alen = strlen(dir);
-					memcpy(dest,dir,alen);
-					dest[alen] = '/'; // +1?
-					memcpy(dest+alen,LITLEN("server"));
-					dest[alen+sizeof("server")-1] = '\0';
-					puts(dest);
-					execl(dest,"autocommit server",NULL);
-					abort();
-#endif
 					if(debugging_fork) {
 						int targetpid = getpid();
 						int gdb = fork();
