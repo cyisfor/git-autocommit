@@ -97,6 +97,7 @@ static void load(const char* name, size_t nlen) {
 			hook->name.base = malloc(nlen); // sigh
 			memcpy(hook->name.base,name,nlen);
 			hook->name.len = nlen;
+			hook->islib = true; // eh
 	}
 
 	void load_so() {
@@ -177,6 +178,7 @@ void hook_run(const char* name, const size_t nlen, uv_async_t* after) {
 			}
 			char* args[] = { hook->u.path };
 			execv(hook->u.path,args);
+			perror(hook->u.path);
 			abort();
 		}
 		
