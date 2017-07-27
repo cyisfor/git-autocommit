@@ -305,8 +305,8 @@ static void commit_now(CC ctx) {
 	}
 
 	uv_async_t* async = malloc(sizeof(uv_async_t));
+	ensure0(uv_async_init(uv_default_loop(), async, post_pre_commit));
 	async->data = ctx;
-	uv_async_init(uv_default_loop(), async, post_pre_commit);
 	HOOK_RUN("pre-commit",async);
 	// now-ish
 }

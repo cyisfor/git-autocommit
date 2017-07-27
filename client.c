@@ -243,6 +243,7 @@ int main(int argc, char *argv[])
 
 	bool debugging_fork = getenv("debugfork") != NULL;
 
+	
 	void try_connect(void) {
 		// uv_pipe_connect fails on abstract sockets
 		// https://github.com/joyent/libuv/issues/1486
@@ -313,10 +314,11 @@ int main(int argc, char *argv[])
 						if(gdb == 0) {
 							char buf[100];
 							snprintf(buf,100,"%d",targetpid);
-							execlp("xfce4-terminal","xterm","-e","gdb","-p",buf,NULL);
+							execlp("xfce4-terminal","xfce4-terminal","-x","gdb","-p",buf,NULL);
 							abort();
 						}
 						waitpid(gdb,NULL,0);
+						sleep(3);
 					}
 					uv_timer_stop(&trying);
 					// call check_init directly, instead of wasting time with execve
