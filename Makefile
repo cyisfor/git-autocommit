@@ -21,7 +21,7 @@ libuv/.libs/libuv.a: libuv/Makefile
 	$(MAKE) -C libuv
 
 libuv/Makefile: libuv/configure
-	cd libuv; ./configure --disable-shared --enable-static
+	cd libuv;  CFLAGS=-fPIC ./configure --disable-shared --enable-static  CFLAGS=-fPIC
 
 libuv/configure: libuv/configure.ac
 	cd libuv; sh autogen.sh
