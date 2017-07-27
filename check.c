@@ -3,6 +3,7 @@
 #include "activity.h"
 #include "hooks.h"
 #include "repo.h"
+#include "ensure.h"
 
 #include <git2/diff.h>
 #include <git2/refs.h>
@@ -324,7 +325,7 @@ static void post_pre_commit(uv_async_t* handle) {
 	char message[0x1000];
 	// why add an arbitrary path to the git log, whatever happened to have been saved
 	// back when the timer was started?
-	ssize_t amt = snprintf(message,0x1000,"auto %lu %lu %lu",
+	ssize_t amt = snprintf(message,0x1000,"auto %u %u %u",
 												 ci.lines, ci.words, ci.characters);
 	write(1, message,amt); // stdout fileno in a weird place to stop unexpected output
 	write(1, " ",1);
