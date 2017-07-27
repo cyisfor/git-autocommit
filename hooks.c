@@ -176,8 +176,13 @@ void hook_run(const char* name, const size_t nlen, uv_async_t* after) {
 					sleep(1);
 				}
 			}
-			char* args[] = { hook->u.path };
+			char* args[] = { hook->u.path, NULL };
 			execv(hook->u.path,args);
+			if(errno == ENOEXEC || errno == EACCES) {
+				perror("trying shell");
+				char* args[] = { "sh", hook->u.path, NULL };
+				execv("/bin/sh",args);
+			}
 			perror(hook->u.path);
 			abort();
 		}
