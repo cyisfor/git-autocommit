@@ -393,12 +393,12 @@ static void maybe_commit(CC ctx, i32 lines, i32 words, i32 characters) {
 		return 9001;
 	}
 	double wordsderp(void) {
-		/* if between 1 and 10, 3600 to 60, if between 10 and 50, 60 to 0 */
+		/* if between 1 and 10, 3600 to 300, if between 10 and 50, 300 to 0 */
 		if(words >= 1) {
 			if(words < 10) {
-				return between(1,10,3600,60,words);
+				return between(1,10,3600,300,words);
 			} else if(words < 50) {
-				return between(10,50,60,0,words);
+				return between(10,50,300,0,words);
 			} else {
 				return 0;
 			}
