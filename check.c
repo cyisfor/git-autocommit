@@ -41,9 +41,9 @@ struct check_context {
 struct commit_info {
 	uv_timer_t committer;
 	time_t next_commit;
-	i32 lines;
-	i32 words;
-	i32 characters;
+	u32 lines;
+	u32 words;
+	u32 characters;
 } ci = {};
 
 #define BLOCKSIZE 512
@@ -155,7 +155,8 @@ static void on_accept(uv_stream_t* server, int err) {
 	activity_poke();
 }
 
-static void maybe_commit(CC ctx, i32 lines, i32 words, i32 characters);
+static
+void maybe_commit(CC ctx, u32 lines, u32 words, u32 characters);
 
 // don't cache the head, because other processes could commit to the repository while we're running!
 static git_commit* get_head(void) {
@@ -202,9 +203,9 @@ static void queue_commit(CC ctx) {
 							 &options));
 	git_tree_free(headtree);
 
-	i32 characters = 0;
-	i32 words = 0;
-	i32 lines = 0;
+	u32 characters = 0;
+	u32 words = 0;
+	u32 lines = 0;
 
 	int on_line(const git_diff_delta *delta, /**< delta that contains this data */
 							const git_diff_hunk *hunk,   /**< hunk containing this data */
@@ -371,52 +372,49 @@ static void commit_later(uv_timer_t* handle) {
 	commit_now((CC)handle->data);
 }
 
-static void maybe_commit(CC ctx, i32 lines, i32 words, i32 characters) {
-	/* if between 1 and 30, go between 3600 and 300s,
-		 if between 30 and 60, go between 300 and 60s
-		 if between 60 and 600, go between 60 and 0 */
+static void maybe_commit(CC ctx, u32 lines, u32 words, u32 characters) {
+	/* if between 1 and 300, go between 3600 and 300s,
+		 if between 300 and 600, go between 300 and 60s
+		 if between 600 and 6000, go between 60 and 0 */
 	double between(int x1, int x2, int y1, int y2, int x) {
 		return y2 + (y1 - y2) * (x - x2) / ((float)(x1 - x2));
 	}
 	double chars(void) {
-		if(characters >= 1) {
-			if(characters < 30) {
-				return between(1,30,3600,300,characters);
-			} else if(characters < 60) {
-				return between(30,60,300,60,characters);
-			} else if(characters < 600) {
-				return between(60,600,60,0,characters);
-			} else {
-				return 0;
-			}
+		if(characters == 0) {
+			return 9001;
+		} else if(characters < 300) {
+			return between(1,300,3600,300,characters);
+		} else if(characters < 600) {
+			return between(300,600,300,60,characters);
+		} else if(characters < 6000) {
+			return between(600,6000,60,0,characters);
+		} else {
+			return 0;
 		}
-		return 9001;
 	}
 	double wordsderp(void) {
-		/* if between 1 and 10, 3600 to 300, if between 10 and 50, 300 to 0 */
-		if(words >= 1) {
-			if(words < 10) {
-				return between(1,10,3600,300,words);
-			} else if(words < 50) {
-				return between(10,50,300,0,words);
-			} else {
-				return 0;
-			}
+		/* if between 1 and 100, 3600 to 300, if between 10 and 50, 300 to 0 */
+		if(words == 0) {
+			return 9001;
+		} else if(words < 100) {
+			return between(1,100,3600,300,words);
+		} else if(words < 500) {
+			return between(100,500,300,0,words);
+		} else {
+			return 0;
 		}
-		return 9001;
 	}
 	double linesderp(void) {
-		/* if between 1 and 5, 3600 to 60, if between 5 and 10, 60 to 0 */
-		if(lines >= 1) {
-			if(lines < 5) {
-				return between(1,5,3600,60,lines);
-			} else if(lines < 10) {
-				return between(5,10,60,0,lines);
-			} else {
-				return 0;
-			}
+		/* if between 1 and 10, 3600 to 60, if between 10 and 20, 60 to 0 */
+		if(lines == 0) {
+			return 9001;
+		} else if(lines < 10) {
+			return between(1,10,3600,60,lines);
+		} else if(lines < 20) {
+			return between(10,20,60,0,lines);
+		} else {
+			return 0;
 		}
-		return 9001;
 	}
 
 	double d = chars();
