@@ -25,7 +25,7 @@
 #include <stdbool.h>
 #include <error.h>
 
-typedef int32_t i32;
+typedef uint32_t u32;
 
 struct check_context {
 	uv_tcp_t stream;
