@@ -216,8 +216,10 @@ static void queue_commit(CC ctx) {
 		 the + (new_file). So you can't compare the old file to the new file, since
 		 they're not both called in the same function. Using a global to store the
 		 line for old_file and just assume the next call will be the + for new_file,
-		 then we'll have to manually diff the two ourselves, since libgit2 won't give
-		 word diffs.
+
+		 third, libgit2 won't do word, or byte diffs (since binary is broken) so
+		 we'll have to manually diff the lines ourselves. This won't be accurate
+		 either, since we can only guess where the lines actually differ.
 	*/
 
 	struct old_line {
@@ -288,6 +290,7 @@ static void queue_commit(CC ctx) {
 					 this is a totally easy test
 					 is "totally" (neither t matches 3 "tes") then "easy" (nothing matches "t")
 					 then not test, because "test" matches test.
+					 
 					 "totally","easy"
 				*/
 			}
