@@ -222,6 +222,7 @@ static void queue_commit(CC ctx) {
 
 	struct old_line {
 		char* s;
+		int pos;
 		int l;
 	};
 
@@ -233,6 +234,7 @@ static void queue_commit(CC ctx) {
 		if(line->origin == '-' && line->new_lineno == -1) {
 			ol->l = line->content_len;
 			ol->s = malloc(ol->l);
+			ol->pos = 0;
 			memcpy(ol->s,line->content,ol->l);
 			return 0;
 		}
@@ -245,15 +247,49 @@ static void queue_commit(CC ctx) {
 		short wchars = 0;
 		size_t lastw = 0;
 		for(;j<llen;++j) {
-			if(ol->l > j && ol->s[j] == l[j]) {
-				// skip where nothing changed.
-				// we're not in a word anymore though.
-				if(inword) {
-					++words;
-					inword = false;
-					lastw = j;
+			/* keep old line position saved, so we can do insertions, like:
+				 this is a test
+				 =>
+				 this is really a test
+				 
+				 w/out saved position, "really a test" is the diff.
+				 w/ saved, "really" is the diff.
+
+				 this might be wrong! If you have
+				 this is a test
+				 =>
+				 this is a totally easy test
+
+				 the diff'll be like "otally" "a" "y" "est" since it takes t,e,s,t from ol.
+				 so... check that, and only consider it a match when ol matches 2 or more, or
+				 end?
+			*/
+			if(ol->l > ol->pos && ol->s[ol->pos] == l[j]) {
+				int newpos = ol->pos;
+				while(ol->s[++newpos] == l[++j]) {
+					if(newpos == ol->l) break;
 				}
-				continue;
+
+				// now we can see if it's a long enough match
+				if(newpos == ol->l || newpos - ol->pos >= 3) {
+					ol->pos = newpos;
+					// skip where nothing changed.
+					// we're not in a word anymore though.
+					if(inword) {
+						++words;
+						inword = false;
+						lastw = j;
+					}
+					continue;
+				}
+				/* now, hopefully the diff for
+					 this is a test
+					 =>
+					 this is a totally easy test
+					 is "totally" (neither t matches 3 "tes") then "easy" (nothing matches "t")
+					 then not test, because "test" matches test.
+					 "totally","easy"
+				*/
 			}
 			if(isspace(l[j])) {
 				if(inword) {
@@ -292,6 +328,7 @@ static void queue_commit(CC ctx) {
 				} else {
 					lastw = j;
 				}
+				// this doesn't examine more than one line, so don't bother counting the newline.
 				if(l[j] == '\n')
 					break;
 			} else {
@@ -327,7 +364,7 @@ static void queue_commit(CC ctx) {
 	}
 
 
-	struct old_line ol;
+	struct old_line ol = {};
 	repo_check(git_diff_foreach(diff, on_file, on_binary, NULL, on_line, &ol));
 	git_diff_free(diff);
 	{ char buf[0x200];
