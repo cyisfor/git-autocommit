@@ -220,6 +220,19 @@ static void queue_commit(CC ctx) {
 		 third, libgit2 won't do word, or byte diffs (since binary is broken) so
 		 we'll have to manually diff the lines ourselves. This won't be accurate
 		 either, since we can only guess where the lines actually differ.
+		 
+		 like, suppose
+		 this is a tricky test
+		 =>
+		 this is a trip yucky test
+		 
+		 since my guess threshold is 3, it'll match the "tri" in tricky, yielding "p"
+		 (which isn't a word), then it'll match the "cky" in tricky, yielding "yu" which
+		 also isn't a word.
+
+		 can't set the threshold too high though, like
+		 "thius is a test" => "this is a test" will consider "is a test" as different,
+		 since the match never gets past "us ".		 
 	*/
 
 	struct old_line {
