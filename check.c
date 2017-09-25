@@ -232,7 +232,10 @@ static void queue_commit(CC ctx) {
 
 		 can't set the threshold too high though, like
 		 "thius is a test" => "this is a test" will consider "is a test" as different,
-		 since the match never gets past "us ".		 
+		 since the match never gets past "us ".
+
+		 with a binary match we'd have "u" => "" as well as the offset, so we could tell
+		 what word that "u" was in.
 	*/
 
 	struct old_line {
@@ -475,7 +478,6 @@ static void commit_later(uv_timer_t* handle) {
 }
 
 static void maybe_commit(CC ctx, u32 lines, u32 words, u32 characters) {
-	return;
 	/* if between 1 and 300, go between 3600 and 300s,
 		 if between 300 and 600, go between 300 and 60s
 		 if between 600 and 6000, go between 60 and 0 */
