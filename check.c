@@ -193,7 +193,7 @@ static void queue_commit(CC ctx) {
 	options.context_lines = 0;
 	options.flags =
 		GIT_DIFF_IGNORE_SUBMODULES |
-		GIT_DIFF_SKIP_BINARY_CHECK |
+		GIT_DIFF_FORCE_BINARY |
 		GIT_DIFF_IGNORE_WHITESPACE;
 	
 	repo_check(git_diff_tree_to_workdir_with_index(
@@ -207,10 +207,36 @@ static void queue_commit(CC ctx) {
 	u32 words = 0;
 	u32 lines = 0;
 
+	/* since libgit2 is badly designed, and broken,
+		 first GIT_FORCE_BINARY forces binary... with empty, blank deltas, and never calls
+		 on_line, so it's like nothing changed. So binary cannot be enabled for any files
+		 perceived (hardcoded) as text.
+		 
+		 second on_line is called /twice/ for each diff, one for the - (old_file) one for
+		 the + (new_file). So you can't compare the old file to the new file, since
+		 they're not both called in the same function. Using a global to store the
+		 line for old_file and just assume the next call will be the + for new_file,
+		 then we'll have to manually diff the two ourselves, since libgit2 won't give
+		 word diffs.
+	*/
+
+	struct old_line {
+		char* s;
+		int l;
+	};
+
 	int on_line(const git_diff_delta *delta, /**< delta that contains this data */
 							const git_diff_hunk *hunk,   /**< hunk containing this data */
 							const git_diff_line *line,   /**< line data */
 							void *payload) {
+		struct old_line* ol = (struct old_line*)payload;
+		if(line->origin == '-' && line->old_lineno == -1) {
+			ol->l = line->content_len;
+			ol->s = malloc(ol->l);
+			memcpy(ol->s,line->content,ol->l);
+			return;
+		}
+		
 		++lines;
 		const char* l = line->content;
 		size_t llen = line->content_len;
@@ -219,6 +245,16 @@ static void queue_commit(CC ctx) {
 		short wchars = 0;
 		size_t lastw = 0;
 		for(;j<llen;++j) {
+			if(ol->l > j && ol->s[j] == l[j]) {
+				// skip where nothing changed.
+				// we're not in a word anymore though.
+				if(inword) {
+					++words;
+					inword = false;
+					lastw = j;
+				}
+				continue;
+			}
 			if(isspace(l[j])) {
 				if(inword) {
 					inword = 0;
@@ -268,7 +304,9 @@ static void queue_commit(CC ctx) {
 				++wchars;
 			}
 			++characters;
-		}			
+		}
+		free(ol->s);
+		ol->s = NULL; // just in case
 		return 0;
 	}
 
@@ -285,6 +323,7 @@ static void queue_commit(CC ctx) {
 		const git_diff_binary *binary,
 		void *payload) {
 		puts("HUMMM");
+		return 0;
 	}
 
 	
@@ -382,6 +421,7 @@ static void commit_later(uv_timer_t* handle) {
 }
 
 static void maybe_commit(CC ctx, u32 lines, u32 words, u32 characters) {
+	return;
 	/* if between 1 and 300, go between 3600 and 300s,
 		 if between 300 and 600, go between 300 and 60s
 		 if between 600 and 6000, go between 60 and 0 */
