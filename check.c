@@ -278,8 +278,17 @@ static void queue_commit(CC ctx) {
 		//printf("Um %.2lf%%\n",progress * 100);
 		return 0;
 	}
+
 	
-	repo_check(git_diff_foreach(diff, on_file, NULL, NULL, on_line, NULL));
+	int on_binary(
+		const git_diff_delta *delta,
+		const git_diff_binary *binary,
+		void *payload) {
+		puts("HUMMM");
+	}
+
+	
+	repo_check(git_diff_foreach(diff, on_file, on_binary, NULL, on_line, NULL));
 	git_diff_free(diff);
 	{ char buf[0x200];
 		write(1, buf, snprintf(buf,0x100,"checking lwc %d %d %d\n",lines,words,characters));
