@@ -193,7 +193,7 @@ static void queue_commit(CC ctx) {
 	options.context_lines = 0;
 	options.flags =
 		GIT_DIFF_IGNORE_SUBMODULES |
-		GIT_DIFF_FORCE_BINARY |
+		GIT_DIFF_SKIP_BINARY_CHECK |
 		GIT_DIFF_IGNORE_WHITESPACE;
 	
 	repo_check(git_diff_tree_to_workdir_with_index(
@@ -230,18 +230,18 @@ static void queue_commit(CC ctx) {
 							const git_diff_line *line,   /**< line data */
 							void *payload) {
 		struct old_line* ol = (struct old_line*)payload;
-		if(line->origin == '-' && line->old_lineno == -1) {
+		if(line->origin == '-' && line->new_lineno == -1) {
 			ol->l = line->content_len;
 			ol->s = malloc(ol->l);
 			memcpy(ol->s,line->content,ol->l);
-			return;
+			return 0;
 		}
 		
 		++lines;
 		const char* l = line->content;
 		size_t llen = line->content_len;
 		size_t j = 0;
-		bool inword = true;
+		bool inword = false;
 		short wchars = 0;
 		size_t lastw = 0;
 		for(;j<llen;++j) {
@@ -326,8 +326,9 @@ static void queue_commit(CC ctx) {
 		return 0;
 	}
 
-	
-	repo_check(git_diff_foreach(diff, on_file, on_binary, NULL, on_line, NULL));
+
+	struct old_line ol;
+	repo_check(git_diff_foreach(diff, on_file, on_binary, NULL, on_line, &ol));
 	git_diff_free(diff);
 	{ char buf[0x200];
 		write(1, buf, snprintf(buf,0x100,"checking lwc %d %d %d\n",lines,words,characters));
