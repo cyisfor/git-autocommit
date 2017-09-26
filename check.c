@@ -282,7 +282,7 @@ static void queue_commit(CC ctx) {
 				 so... check that, and only consider it a match when ol matches 2 or more, or
 				 end?
 			*/
-			if(ol->l > ol->pos && ol->s[ol->pos] == l[j]) {
+			if(ol->s && ol->l > ol->pos && ol->s[ol->pos] == l[j]) {
 				int newpos = ol->pos;
 				while(ol->s[++newpos] == l[++j]) {
 					if(newpos == ol->l) break;
