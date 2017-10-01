@@ -271,8 +271,8 @@ int main(int argc, char *argv[])
 			printf("Got socket %d\n",sock);
 
 			// we got it. start the server
+			// do not unblock signals, since we're also duping our signalfd.
 			int server_pid = fork();
-			assert(server_pid >= 0);
 			if(server_pid == 0) {
 				setsid();
 
@@ -319,6 +319,8 @@ int main(int argc, char *argv[])
 				longjmp(start_watcher, watcher);
 				abort();
 			}
+			assert(server_pid > 0);
+
 			printf("starting server %d\n",server_pid);
 			net_forkhack(server_pid);
 			close(sock); // XXX: could we finagle this socket into a connected one without closing it?

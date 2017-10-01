@@ -1,3 +1,4 @@
+#include "ensure.h"
 #include "repo.h"
 #include "hooks.h"
 #include "myassert.h"
@@ -168,7 +169,7 @@ void hook_run(const char* name, const size_t nlen, uv_async_t* after) {
 		if(after)
 			assert0(sem_init(&ready, 1, 0));
 		
-		int pid = fork();
+		int pid = checkpid_fork();
 		if(pid == 0) {
 			if(after) {
 				while(0 != sem_wait(&ready)) {

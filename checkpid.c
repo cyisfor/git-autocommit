@@ -1,7 +1,9 @@
 #include "checkpid.h"
 #include "myassert.h"
 
-#include <signal.h> // sigaction
+#include <sys/signalfd.h>
+#include <signal.h>
+
 #include <stdio.h>
 #include <stdarg.h> // va_*
 #include <sys/wait.h> // waitpid
