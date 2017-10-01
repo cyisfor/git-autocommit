@@ -201,7 +201,7 @@ void hook_run(const char* name, const size_t nlen, uv_async_t* after) {
 		checkpid(pid, "hook %s", name);
 		if(after) {
 			checkpid_after(pid, after);
-			sem_post(&ready);
+			sem_post(ready);
 			munmap(mem,sizeof(sem_t));
 		}
 		// this won't wait, so we can still do stuff
