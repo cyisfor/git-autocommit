@@ -81,7 +81,6 @@ void checkpid_after(int pid, uv_async_t* async) {
 		afters->prev = a;
 	}
 	afters = a;
-	
 }
 
 static sigset_t blocked;
