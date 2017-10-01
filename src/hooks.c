@@ -176,7 +176,7 @@ void hook_run(const char* name, const size_t nlen, uv_async_t* after) {
 			assert(mem != MAP_FAILED);
 			ready = (sem_t*)mem;
 			ensure0(sem_init(ready, 1, 0));
-		
+		}
 		int pid = checkpid_fork();
 		if(pid == 0) {
 			if(after) {
