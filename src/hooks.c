@@ -165,18 +165,25 @@ void hook_run(const char* name, const size_t nlen, uv_async_t* after) {
 		hook->u.run.f(hook->u.run.data, after);
 	} else {
 		// the PID cannot be allowed to exit before we get our after handler in the list
-		sem_t ready;
-		if(after)
-			assert0(sem_init(&ready, 1, 0));
+		sem_t* ready;
+		void* mem;
+		if(after) {
+			// ready must be ALLOCATED in shared memory, or it's not multiprocess
+			// fuck sem_open
+			mem = mmap(NULL,sizeof(sem_t),PROT_WRITE,MAP_ANONYMOUS|MAP_SHARED,-1,0);
+			assert(mem != MAP_FAILED);
+			ready = (sem_t*)mem;
+			ensure0(sem_init(ready, 1, 0));
 		
 		int pid = checkpid_fork();
 		if(pid == 0) {
 			if(after) {
-				while(0 != sem_wait(&ready)) {
+				while(0 != sem_wait(ready)) {
 					puts("ohpleaseohpleasedon'tdie");
 					sleep(1);
 				}
 				puts("semaphore waited!");
+				munmap(mem,sizeof(sem_t));
 			}
 			char* args[] = { hook->u.path, NULL };
 			execv(hook->u.path,args);
@@ -193,6 +200,7 @@ void hook_run(const char* name, const size_t nlen, uv_async_t* after) {
 		if(after) {
 			checkpid_after(pid, after);
 			sem_post(&ready);
+			munmap(mem,sizeof(sem_t));
 		}
 		// this won't wait, so we can still do stuff
 	}
