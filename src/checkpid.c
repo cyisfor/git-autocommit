@@ -1,3 +1,5 @@
+#include "ensure.h"
+
 #include "checkpid.h"
 #include "myassert.h"
 
@@ -7,6 +9,7 @@
 #include <stdio.h>
 #include <stdarg.h> // va_*
 #include <sys/wait.h> // waitpid
+#include <unistd.h> // fork
 
 struct after {
 	int pid;
@@ -74,7 +77,9 @@ void checkpid_after(int pid, uv_async_t* async) {
 	a->async = async;
 	a->next = afters;
 	a->prev = NULL;
-	afters->prev = a;
+	if(afters) {
+		afters->prev = a;
+	}
 	afters = a;
 	
 }
@@ -101,4 +106,15 @@ void checkpid_init(void) {
 	ensure0(uv_pipe_init(uv_default_loop(), &sfd, 0));
 	ensure0(uv_pipe_open(&sfd, s));
 	uv_read_start((uv_stream_t*)&sfd, alloc_cb, get_reply);
+}
+
+void checkpid(int pid, const char* fmt, ...) {
+	printf("launch %d ",pid);
+	va_list arg;
+	va_start(arg, fmt);
+	vfprintf(stdout, fmt, arg);
+	va_end(arg);
+	fputc('\n',stdout);
+	// then just let the handler catch it...
+	// we don't want to allocate memory for messages about every pending process?
 }
