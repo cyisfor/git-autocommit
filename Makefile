@@ -1,30 +1,44 @@
-P=$(shell PKG_CONFIG_PATH=libuv pkg-config libuv $1)
-OPT=-g
-LDLIBS+=-lgit2 -ldl
-#LDLIBS+=libuv/.libs/libuv.a #-lpthread
-LDFLAGS+=$(OPT) -rdynamic -pthread
-# -rdynamic makes things like checkpid() available to hooks, instead of
-# undefined symbol: checkpid
-CFLAGS+=$(OPT) -Ilibuv/include/ -fPIC -DSOURCE_LOCATION='"'`pwd`'"'
-all: index_reader server client
-libautocommit.a: activity.o check.o net.o repo.o hooks.o checkpid.o
+VPATH = o
+
+P:=libuv libgit2
+PKG_CONFIG_PATH:=/custom/libgit2/lib/pkgconfig
+export PKG_CONFIG_PATH
+
+CFLAGS+=-ggdb -fdiagnostics-color=always
+CFLAGS+=$(patsubst -I%,-isystem%, $(shell pkg-config --cflags $(P))) -I.
+CFLAGS+=-DSOURCE_LOCATION='"'`pwd`'"'
+
+LDLIBS+=$(shell pkg-config --libs $(P))
+
+all: server client index_reader
+
+LINK=$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+COMPILE=$(CC) $(CFLAGS) -MMD -MT $@ -c -o $@ $<
+
+# bleah, accumulation side effects...
+O=$(patsubst %,o/%.o,$N) \
+$(foreach name,$(N),$(eval targets:=$$(targets) $(name)))
+S=$(patsubst %,src/%.c,$N)
+
+N=server
+server: $O libautocommit.a
+	$(LINK)
+
+N=client
+client: $O libautocommit.a
+	$(LINK)
+
+N=activity check net repo hooks checkpid note
+libautocommit.a: $O
 	ar crs $@ $^
-server: server.o libautocommit.a libuv/.libs/libuv.a
-client: client.o libautocommit.a libuv/.libs/libuv.a
+
+o/%.o: src/%.c | o
+	$(COMPILE)
+
 clean:
-	git clean -fdx
+	rm -rf o
 
-index_reader: index_reader.o repo.o activity.o libuv/.libs/libuv.a
+o:
+	mkdir $@
 
-
-libuv/.libs/libuv.a: libuv/Makefile
-	$(MAKE) -C libuv
-
-libuv/Makefile: libuv/configure
-	cd libuv;  CFLAGS=-fPIC ./configure --disable-shared --enable-static  CFLAGS=-fPIC
-
-libuv/configure: libuv/configure.ac
-	cd libuv; sh autogen.sh
-
-libuv/configure.ac:
-	git submodule add https://github.com/joyent/libuv.git 
+-include $(patsubst %, o/%.d,$(targets))

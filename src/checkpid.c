@@ -42,7 +42,7 @@ static void get_reply(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
 		pid = waitpid(-1, &status, WNOHANG);
 		if(pid == 0) break;
 		if(pid < 0) {
-			ensure_eq(errno,ENOCLD);
+			ensure_eq(errno,ECHILD);
 			break;
 		}
 		
