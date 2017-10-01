@@ -4,6 +4,8 @@
 #include "myassert.h"
 #include "checkpid.h"
 
+#include <sys/mman.h> // mmap
+
 #include <dlfcn.h> // dlopen, dlsym
 #include <unistd.h> // fork, exec*
 #include <stdarg.h> // va_*
