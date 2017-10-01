@@ -41,6 +41,8 @@ static void get_reply(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
 	for(;;) {
 		pid = waitpid(-1, &status, WNOHANG);
 		if(pid == 0) break;
+		if(pid < 0) {
+			ensure_eq(errno,ENOCHLD
 		ensure_gt(pid,0);
 		
 		if(WIFSIGNALED(status)) {

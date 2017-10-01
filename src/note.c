@@ -45,7 +45,8 @@ DEFINE(warn,"WARN");
 HEAD(error) {
 	BODY("ERROR");
 	if(errno) {
-		perror("errno");
+		fprintf(stderr,"%d",errno);
+		perror(" errno");
 	}
 	if(getenv("error_nonfatal")) return;
 	if(jumping) {
