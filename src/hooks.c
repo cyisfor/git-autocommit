@@ -176,6 +176,7 @@ void hook_run(const char* name, const size_t nlen, uv_async_t* after) {
 					puts("ohpleaseohpleasedon'tdie");
 					sleep(1);
 				}
+				puts("semaphore waited!");
 			}
 			char* args[] = { hook->u.path, NULL };
 			execv(hook->u.path,args);
