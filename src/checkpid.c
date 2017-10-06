@@ -59,15 +59,19 @@ static void get_reply(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
 		struct after* cur = afters;
 		while(cur) {
 			if(cur->pid == pid) {
-				// not safe to free async until it is received
-				uv_async_send(cur->async);
+				if(cur == afters) {
+					afters = cur->next;
+				}
 				if(cur->next) {
 					cur->next->prev = cur->prev;
 				}
 				if(cur->prev) {
 					cur->prev->next = cur->next;
 				}
+				// not safe to free async until it is received
+				uv_async_send(cur->async);
 				free(cur);
+				break;
 			}
 			cur = cur->next;
 		}
