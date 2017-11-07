@@ -185,6 +185,23 @@ static void queue_commit(CC ctx) {
 	git_diff* diff = NULL;
 	git_tree* headtree = NULL;
 
+	switch(git_repository_state(repo)) {
+	case GIT_REPOSITORY_STATE_MERGE:
+	case GIT_REPOSITORY_STATE_REVERT:
+	case GIT_REPOSITORY_STATE_REVERT_SEQUENCE:
+	case GIT_REPOSITORY_STATE_CHERRYPICK:
+	case GIT_REPOSITORY_STATE_CHERRYPICK_SEQUENCE:
+	case GIT_REPOSITORY_STATE_BISECT:
+	case GIT_REPOSITORY_STATE_REBASE:
+	case GIT_REPOSITORY_STATE_REBASE_INTERACTIVE:
+	case GIT_REPOSITORY_STATE_REBASE_MERGE:
+	case GIT_REPOSITORY_STATE_APPLY_MAILBOX:
+	case GIT_REPOSITORY_STATE_APPLY_MAILBOX_OR_REBASE:
+		printf("not auto-committing when repository is in odd state %d\n",
+					 git_repository_state(repo));
+		return;
+	};
+	
 	git_commit* head = get_head();
 	repo_check(git_commit_tree(&headtree, head));	
 	git_commit_free(head);
