@@ -13,13 +13,22 @@
 (defun maybe-git-commit ()
   (interactive)
 	(when do-git-commit
-		(let* ((buffer ((get SYMBOL PROPNAME)-buffer-create "*Git Commit Thingy*"))
+		(let* ((buffer (get-buffer-create "*Git Commit Thingy*"))
 					 (process (get-buffer-process buffer)))
 			(setenv "file" (buffer-file-name))
 			(start-process "Git Commit Thingy"
 										 buffer
 										 (expand-file-name "~/code/git/autocommit/client"))
 			(setenv "file"))))
+
+(defun no-git-commit ()
+	(interactive)
+	(setq do-git-commit nil))
+
+(defun yes-git-commit ()
+	(interactive)
+	(setq do-git-commit t)
+	(maybe-git-commit))
 
 (defun gitcommit-enhooken ()
   (set (make-local-variable 'backup-inhibited) t)
