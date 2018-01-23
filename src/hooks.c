@@ -108,7 +108,7 @@ static void load(const char* name, size_t nlen) {
 		assert(dll);
 		const char* e = dlerror();
 		if(e != NULL) {
-			error(23,0,e);
+			perror(e);
 			abort();
 		}
 		typedef void* (*initter)(void);

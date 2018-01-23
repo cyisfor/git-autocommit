@@ -83,6 +83,12 @@ static void cleanup(uv_handle_t* h) {
 
 static void queue_commit(CC ctx);
 
+void just_exit() {
+	exit(0);
+}
+
+#pragma GCC diagnostic ignored "-Wtrampolines"
+
 static void on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
 	CC ctx = (CC) stream;
 	if(nread < 0 || nread == UV_EOF) {
@@ -90,10 +96,6 @@ static void on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
 		return;
 	}
 	ctx->read += nread;
-
-	void just_exit() {
-		exit(0);
-	}
 
 	// now read all the messages we see.
 	for(;;) {
@@ -186,21 +188,25 @@ static void queue_commit(CC ctx) {
 	git_tree* headtree = NULL;
 
 	switch(git_repository_state(repo)) {
-	case GIT_REPOSITORY_STATE_MERGE:
-	case GIT_REPOSITORY_STATE_REVERT:
-	case GIT_REPOSITORY_STATE_REVERT_SEQUENCE:
-	case GIT_REPOSITORY_STATE_CHERRYPICK:
-	case GIT_REPOSITORY_STATE_CHERRYPICK_SEQUENCE:
-	case GIT_REPOSITORY_STATE_BISECT:
-	case GIT_REPOSITORY_STATE_REBASE:
-	case GIT_REPOSITORY_STATE_REBASE_INTERACTIVE:
-	case GIT_REPOSITORY_STATE_REBASE_MERGE:
-	case GIT_REPOSITORY_STATE_APPLY_MAILBOX:
-	case GIT_REPOSITORY_STATE_APPLY_MAILBOX_OR_REBASE:
-		printf("not auto-committing when repository is in odd state %d\n",
-					 git_repository_state(repo));
-		return;
-	};
+#define DERP(e) DERP2(e)
+#define DERP2(e) GIT_REPOSITORY_STATE_ ## e		
+#define ONE(name)																\
+			case DERP(name):													\
+				printf("not auto-committing when repository in " #name " %d\n", \
+							 git_repository_state(repo));															\
+				return;
+		ONE(MERGE);
+		ONE(REVERT);
+		ONE(REVERT_SEQUENCE);
+		ONE(CHERRYPICK);
+		ONE(CHERRYPICK_SEQUENCE);
+		ONE(BISECT);
+		ONE(REBASE);
+		ONE(REBASE_INTERACTIVE);
+		ONE(REBASE_MERGE);
+		ONE(APPLY_MAILBOX);
+		ONE(APPLY_MAILBOX_OR_REBASE);
+		};
 	
 	git_commit* head = get_head();
 	repo_check(git_commit_tree(&headtree, head));	

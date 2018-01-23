@@ -2,6 +2,7 @@
 #include "check.h"
 #include "repo.h"
 #include "net.h"
+#include "note.h"
 
 #include <uv.h>
 
@@ -22,6 +23,7 @@ int main(int argc, char *argv[])
 	} else {
 		assert(0 == repo_init(argv[1]));
 	}
+	note_init();
 	// no overflow why?
 	strcpy(argv[0], "autocommit server (standalone)");
 	prctl(PR_SET_NAME, "autocommit server (standalone)", 0, 0, 0);

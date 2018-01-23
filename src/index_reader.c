@@ -8,7 +8,14 @@
 #include <stdio.h>
 #include <sys/stat.h>
 
-
+int on_file(const git_diff_delta *delta,
+						float progress,
+						void *payload) {
+	git_diff* diff = (git_diff*)payload;
+	printf("diff %c %s\n",git_diff_status_char(delta->status),
+				 delta->old_file.path);
+}
+	
 int main(int argc, char *argv[])
 {
 
@@ -21,15 +28,7 @@ int main(int argc, char *argv[])
 	repo_check(git_diff_index_to_workdir(&diff,repo,idx,&opts));
 
 	
-	int on_file(const git_diff_delta *delta,
-							float progress,
-							void *payload) {
-		printf("diff %c %s\n",git_diff_status_char(delta->status),
-					 delta->old_file.path);
-	}
-	
-
-	git_diff_foreach(diff, on_file,NULL,NULL,NULL,NULL);
+	git_diff_foreach(diff, on_file,NULL,NULL,NULL,diff);
 	
 	struct stat buf;
 	time_t imtime = 0;
@@ -40,7 +39,8 @@ int main(int argc, char *argv[])
 	size_t i;
 	for(i=0;i<git_index_entrycount(idx);++i) {
 		const git_index_entry * e = git_index_get_byindex(idx,i);
-		printf("%s %x %lx %lx %lx\n",e->path,e->flags,e->mtime.seconds,GIT_IDXENTRY_STAGE(e),
+		printf("%s %x %x %x %x\n",
+					 e->path,e->flags,e->mtime.seconds,GIT_IDXENTRY_STAGE(e),
 			git_index_entry_stage(e));
 
 		if(0==stat(e->path,&buf)) {
