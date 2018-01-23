@@ -28,6 +28,10 @@ N=client
 client: $O libautocommit.a
 	$(LINK)
 
+N=index_reader 
+index_reader: $O libautocommit.a
+	$(LINK)
+
 N=activity check net repo hooks checkpid note
 libautocommit.a: $O
 	ar crs $@ $^
