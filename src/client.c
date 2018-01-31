@@ -7,7 +7,9 @@
 #include <uv.h>
 
 #include <sys/socket.h> // 
-#include <sys/un.h> // 
+#include <sys/un.h> //
+#include <sys/resource.h> // setrlimit
+
 
 #include <setjmp.h>
 #include <libgen.h> // dirname
@@ -124,11 +126,16 @@ void get_reply(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
 		struct info_message* im = (struct info_message*)buf->base;
 			
 		printf("Server Info: pid %d (%d)\n"
-					 "Lines %lu Words %lu Characters %lu\n"
-					 "Next commit: %lu (in %lu)\n",
+					 "Lines %lu Words %lu Characters %lu\n",
 					 im->pid, net_pid(sock),
-					 im->lines, im->words, im->characters,
-					 im->next_commit, im->next_commit - time(NULL));
+					 im->lines, im->words, im->characters);
+		if(im->next_commit) {
+			printf(
+				"Next commit: %lu (in %ld)\n",
+				im->next_commit, im->next_commit - time(NULL));
+		} else {
+			puts("No commit scheduled");
+		}
 			
 		uv_read_stop(stream);
 	} else {
@@ -268,6 +275,12 @@ int main(int argc, char *argv[])
 {
 	// env "file" = name of file that was saved
 
+	struct rlimit rlim = {
+		2*1024*1024*1024L,
+		2*1024*1024*1024L
+	};
+	setrlimit(RLIMIT_AS, &rlim);
+	
 	if(0 != (server_pid = setjmp(start_watcher))) {
 		// keep our retarded watcher nice and retardedly simple,
 		// with no uv_loop hanging out there.
