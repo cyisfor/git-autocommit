@@ -1,4 +1,4 @@
-enum operations { ADD, QUIT, INFO };
+enum operations { ADD, QUIT, INFO, FORCE };
 
 #include <unistd.h> // pid_t
 #include <time.h> // time_t

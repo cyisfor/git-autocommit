@@ -310,8 +310,19 @@ int main(int argc, char *argv[])
 	}
 
 	quitting = (NULL != getenv("quit"));
-	checking = (NULL != getenv("check"));
-	op = quitting ? QUIT : checking ? INFO : ADD;
+	if(quitting) {
+		op = QUIT;
+	} else {
+		checking = (NULL != getenv("check"));
+		if(checking) {
+			op = INFO;
+		} else if(NULL != getenv("force")) {
+			op = FORCE;
+		} else {
+			op = ADD;
+		}
+	}
+	
 		
 	char* path;
 	char bigpath[PATH_MAX];

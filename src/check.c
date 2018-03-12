@@ -89,6 +89,8 @@ void just_exit() {
 
 #pragma GCC diagnostic ignored "-Wtrampolines"
 
+static void commit_now(CC ctx);
+
 static void on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
 	CC ctx = (CC) stream;
 	if(nread == UV_EOF) {
@@ -118,6 +120,11 @@ static void on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
 			uv_write(req, stream, &ok, 1, (void*)just_exit);
 		}
 		return;
+		case FORCE:
+		{
+			commit_now(ctx);
+		}
+		break;
 		case INFO:
 		{
 			pid_t pid = getpid();
@@ -441,6 +448,7 @@ static void commit_now(CC ctx) {
 
 	uv_async_t* async = malloc(sizeof(uv_async_t));
 	ensure0(uv_async_init(uv_default_loop(), async, post_pre_commit));
+	assert(ctx);
 	async->data = ctx;
 	HOOK_RUN("pre-commit",async);
 	// now-ish
@@ -448,8 +456,8 @@ static void commit_now(CC ctx) {
 
 static void post_pre_commit(uv_async_t* async) {
 	CC ctx = (CC)async->data;
-	uv_close((uv_handle_t*) ctx, (void(*)(uv_handle_t*))free);
 	free(async);
+	uv_close((uv_handle_t*) ctx, (void(*)(uv_handle_t*))free);
 
 	git_index* idx = NULL;
 	git_signature *me = NULL;
@@ -570,6 +578,7 @@ static void maybe_commit(CC ctx, u32 lines, u32 words, u32 characters) {
 		ci.next_commit = now + d;
 		ci.words = words;
 		ci.characters = characters;
+		ci.committer.data = ctx;
 		uv_timer_start((uv_timer_t*)&ci, commit_later, d * 1000 + 1, 0);
 	}
 }
