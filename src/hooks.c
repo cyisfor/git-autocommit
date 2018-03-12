@@ -212,6 +212,7 @@ void hooks_init(void) {
 	assert0(chdir(git_repository_path(repo)));
 	mkdir("hooks",0755);
 	assert0(chdir("hooks"));
+	setenv("LD_LIBRARY_PATH",".",1);
 	char buf[PATH_MAX];
 	load(LITLEN("pre-commit"));
 	load(LITLEN("post-commit"));

@@ -6,7 +6,7 @@ export PKG_CONFIG_PATH
 
 CFLAGS+=-ggdb -fdiagnostics-color=always
 CFLAGS+=$(patsubst -I%,-isystem%, $(shell pkg-config --cflags $(P))) -I.
-CFLAGS+=-DSOURCE_LOCATION='"'`pwd`'"'
+CFLAGS+=-DSOURCE_LOCATION='"'`pwd`/src'"'
 
 LDLIBS+=$(shell pkg-config --libs $(P))
 

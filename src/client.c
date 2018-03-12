@@ -28,8 +28,6 @@
 #include <stdio.h>
 
 bool debugging_fork = false;
-bool quitting = false;
-bool checking = false;
 
 int open_home(void) {
 	const char* path = getenv("HOME");
@@ -194,8 +192,8 @@ void try_connect() {
 			}
 		}
 
-		if(quitting) exit(0);
-		if(checking && NULL == getenv("start")) {
+		if(op == QUIT || op == FORCE) exit(0);
+		if(op == INFO && NULL == getenv("start")) {
 			printf("Server not running.\n");
 			exit(1);
 		}
@@ -309,20 +307,15 @@ int main(int argc, char *argv[])
 		exit(23);
 	}
 
-	quitting = (NULL != getenv("quit"));
-	if(quitting) {
+	if(NULL != getenv("quit")) {
 		op = QUIT;
+	} else if(NULL != getenv("check")) {
+		op = INFO;
+	} else if(NULL != getenv("force")) {
+		op = FORCE;
 	} else {
-		checking = (NULL != getenv("check"));
-		if(checking) {
-			op = INFO;
-		} else if(NULL != getenv("force")) {
-			op = FORCE;
-		} else {
-			op = ADD;
-		}
+		op = ADD;
 	}
-	
 		
 	char* path;
 	char bigpath[PATH_MAX];

@@ -123,6 +123,8 @@ static void on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
 		case FORCE:
 		{
 			commit_now(ctx);
+			uv_write_t* req = malloc(sizeof(uv_write_t));
+			uv_write(req, stream, &ok, 1, (void*)free);
 		}
 		break;
 		case INFO:
