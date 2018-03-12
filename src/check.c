@@ -91,8 +91,13 @@ void just_exit() {
 
 static void on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
 	CC ctx = (CC) stream;
-	if(nread < 0 || nread == UV_EOF) {
+	if(nread == UV_EOF) {
 		uv_close((uv_handle_t*)stream, cleanup);
+		return;
+	}
+	if(nread < 0) {
+		puts("Some weird error reading");
+		uv_read_stop(stream);
 		return;
 	}
 	ctx->read += nread;
@@ -441,10 +446,11 @@ static void commit_now(CC ctx) {
 	// now-ish
 }
 
-static void post_pre_commit(uv_async_t* handle) {
-	CC ctx = (CC)handle->data;
-	uv_close((uv_handle_t*) handle, (void(*)(uv_handle_t*))free);
-	
+static void post_pre_commit(uv_async_t* async) {
+	CC ctx = (CC)async->data;
+	uv_close((uv_handle_t*) ctx, (void(*)(uv_handle_t*))free);
+	free(async);
+
 	git_index* idx = NULL;
 	git_signature *me = NULL;
 

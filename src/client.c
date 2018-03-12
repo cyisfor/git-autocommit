@@ -106,11 +106,7 @@ uv_timer_t trying;
 void kill_remote(uv_stream_t* stream, ssize_t err) {
 	printf("Killing remote... %s %ld %d\n",uv_strerror(err), err, net_pid(sock));
 	uv_read_stop(stream);
-	if(err != UV_ECONNRESET) {
-		uv_read_start(stream, &alloc_cb, restart_when_closed);
-	} else {
-		uv_close((uv_handle_t*)stream, (void*)csucks);
-	}
+	uv_close((uv_handle_t*)stream, (void*)csucks);
 	kill(net_pid(sock),SIGTERM);
 }
 
