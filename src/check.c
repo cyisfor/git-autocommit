@@ -7,7 +7,8 @@
 #include "ensure.h"
 
 #include <event2/bufferevent.h>
-
+#include <event2/buffer.h>
+#include <event2/listener.h>
 
 #include <git2/diff.h>
 #include <git2/refs.h>
@@ -73,7 +74,7 @@ on_events(struct bufferevent *conn, short events, void *ctx) {
 static void on_read(struct bufferevent* conn, void* udata) {
 	struct evbuffer* input = bufferevent_get_input(conn);
 	size_t avail = evbuffer_get_length(input);
-	buffereevent_enable(conn, EV_WRITE);
+	bufferevent_enable(conn, EV_WRITE);
 	// now read all the messages we see.
 	while(avail > 0) {
 		char op;
@@ -102,7 +103,7 @@ static void on_read(struct bufferevent* conn, void* udata) {
 		}
 		break;
 		default:
-			error(23,0,"bad message %d\n",ctx->buf[ctx->checked]);
+			error(23,0,"bad message %d\n",op);
 		};
 	}
 }
@@ -113,8 +114,8 @@ on_accept(struct evconnlistener *listener,
 					void *ctx) {
 	struct bufferevent* conn = bufferevent_socket_new(base, fd,
 																										BEV_OPT_CLOSE_ON_FREE);
-	buffereevent_setcb(conn, on_read, NULL, on_events, NULL);
-	buffereevent_enable(conn, EV_READ);
+	bufferevent_setcb(conn, on_read, NULL, on_events, NULL);
+	bufferevent_enable(conn, EV_READ);
 	activity_poke();
 }
 
@@ -399,7 +400,7 @@ static void commit_now(struct bufferevent* conn) {
 	}
 
 	struct continuation after = {
-		post_pre_commit, conn
+		(void*)post_pre_commit, conn
 	};
 	HOOK_RUN("pre-commit",after);
 	// now-ish
@@ -537,15 +538,16 @@ static void maybe_commit(u32 lines, u32 words, u32 characters) {
 }
 
 void check_init(int sock) {
-	conn = bufferevent_socket_new(base, sock, BEV_OPT_CLOSE_ON_FREE);
-	ci.later = evtimer_new(base, commit_later, conn);
+	struct bufferevent* conn = bufferevent_socket_new(
+		base, sock, BEV_OPT_CLOSE_ON_FREE);
+	ci.later = evtimer_new(base, (void*)commit_later, conn);
 
 	activity_init();
 	hooks_init();
 
 	struct evconnlistener* listener = evconnlistener_new(
 		base,
-		on_accept,
+		on_accept, NULL,
 		LEV_OPT_CLOSE_ON_EXEC |
 		LEV_OPT_CLOSE_ON_FREE,
 		10,
