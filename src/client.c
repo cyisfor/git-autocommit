@@ -186,7 +186,7 @@ jmp_buf start_watcher;
 static
 void try_connect(void);
 static
-void reconnect(int sock) {
+void reconnect(int sock);
 
 void spawn_server(void) {
 	if(++tries > 3) {
@@ -273,10 +273,10 @@ void try_connect(void) {
 
 static
 void wrote_response(struct bufferevent* conn, void* arg) {
-	bufferevent_setcb(conn, get_reply, NULL, on_event, NULL);
+	bufferevent_setcb(conn, get_reply, NULL, on_events, NULL);
 	bufferevent_setwatermark(conn, EV_READ, 1, 1 + sizeof(struct info_message));
-	bufferevent_disable(EV_WRITE);
-	bufferevent_enable(EV_READ);
+	bufferevent_disable(conn, EV_WRITE);
+	bufferevent_enable(conn, EV_READ);
 }
 
 static
@@ -298,10 +298,10 @@ void reconnect(int sock) {
 			.tv_usec = 500000
 		};
 		bufferevent_set_timeouts(conn, &timeout, &timeout);
-		bufferevent_setcb(conn, get_reply, wrote_response, on_event, NULL);
+		bufferevent_setcb(conn, get_reply, wrote_response, on_events, NULL);
 		bufferevent_setwatermark(conn, EV_WRITE, 1, 1);
 		bufferevent_write(conn, &op, 1);
-		bufferevent_enable(EV_WRITE);
+		bufferevent_enable(conn, EV_WRITE);
 	} else {
 		perror("um");
 		int pid = net_pid(sock);
