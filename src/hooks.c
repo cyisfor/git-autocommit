@@ -148,7 +148,7 @@ static void load(const char* name, size_t nlen) {
 	abort(); // nuever 
 }
 
-void hook_run(const char* name, const size_t nlen, uv_async_t* after) {
+void hook_run(const char* name, const size_t nlen, struct continuation after) {
 	size_t i = 0;
 	for(;i<nhooks;++i) {
 		if(hooks[i].name.len == nlen &&
@@ -158,7 +158,7 @@ void hook_run(const char* name, const size_t nlen, uv_async_t* after) {
 	}
 	if(i == nhooks) {
 		// no hook
-		if(after) uv_async_send(after);
+		continuation_run(after)
 		return;
 	}
 	struct hook* hook = hooks+i;

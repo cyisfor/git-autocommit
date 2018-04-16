@@ -49,6 +49,7 @@ void just_exit() {
 
 static void commit_now(CC ctx);
 
+bool quitting = false;
 
 static void
 on_events(struct bufferevent *conn, short events, void *ctx) {
@@ -60,6 +61,9 @@ on_events(struct bufferevent *conn, short events, void *ctx) {
 		return;
 	} 
 	bufferevent_free(conn);
+	if(quitting) {
+		event_base_loopexit(base, NULL);
+	}
 }
 
 static void on_read(struct bufferevent* conn, void* udata) {
@@ -370,15 +374,18 @@ static void queue_commit(CC ctx) {
 
 static void post_pre_commit(uv_async_t* handle);
 
-static void commit_now(CC ctx) {
+static
+int check(const char *path, unsigned int status_flags, void *payload) {
+	int* changes = (int*)payload;
+	++(*changes);
+	return 0;
+}
+
+static void commit_now(struct bufferevent* conn) {
 	int changes = 0;
-	int check(const char *path, unsigned int status_flags, void *payload) {
-		++changes;
-		return 0;
-	}
 	git_status_options opt = GIT_STATUS_OPTIONS_INIT;
 	opt.show = GIT_STATUS_SHOW_INDEX_ONLY;
-	git_status_foreach_ext(repo,&opt,check,NULL);
+	git_status_foreach_ext(repo,&opt,check,&changes);
 	
 	if(0 == changes) {
 		#define LITLEN(s) s, (sizeof(s)-1)
@@ -387,18 +394,12 @@ static void commit_now(CC ctx) {
 		return;
 	}
 
-	uv_async_t* async = malloc(sizeof(uv_async_t));
-	ensure0(uv_async_init(uv_default_loop(), async, post_pre_commit));
-	assert(ctx);
-	async->data = ctx;
-	HOOK_RUN("pre-commit",async);
+	HOOK_RUN("pre-commit",post_pre_commit, conn);
 	// now-ish
 }
 
-static void post_pre_commit(uv_async_t* async) {
-	CC ctx = (CC)async->data;
-	free(async);
-	uv_close((uv_handle_t*) ctx, (void(*)(uv_handle_t*))free);
+static void post_pre_commit(struct bufferevent* conn) {
+	bufferevent_free(conn);
 
 	git_index* idx = NULL;
 	git_signature *me = NULL;
