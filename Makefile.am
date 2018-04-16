@@ -11,11 +11,12 @@ libautocommit_la_SOURCES = \
 	src/hooks.c \
 	src/checkpid.c \
 	src/eventbase.c \
+	src/continuation.c \
 	src/note.c
 
 bin_PROGRAMS = server client
 
 server_SOURCES = src/server.c
-server_LDADD = libautocommit.la $(EVENT_LIBS) $(GIT_LIBS)
-client_SOURCES = src/client.c
-client_LDADD = libautocommit.la $(EVENT_LIBS) $(GIT_LIBS)
+server_LDADD = libautocommit.la $(EVENT_LIBS) $(GIT_LIBS) -ldl
+client_SOURCES = src/client.c 
+client_LDADD = libautocommit.la $(EVENT_LIBS) $(GIT_LIBS) -ldl
