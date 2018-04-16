@@ -10,7 +10,7 @@ static void too_idle() {
 
 const struct timeval delay = {
 	.tv_sec = 60 * 60 * 1000
-}
+};
 
 void activity_poke(void) {
 	evtimer_del(activity);
@@ -18,6 +18,6 @@ void activity_poke(void) {
 }
 
 void activity_init(void) {
-	activity = evtimer_new(base, too_idle, NULL);
+	activity = evtimer_new(base, (void*)too_idle, NULL);
 	evtimer_add(activity, &delay);
 }

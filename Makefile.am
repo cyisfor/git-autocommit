@@ -15,7 +15,6 @@ libautocommit_la_SOURCES = \
 bin_PROGRAMS = server client
 
 server_SOURCES = src/server.c
-server
 server_LDADD = libautocommit.la $(EVENT_LIBS) $(GIT_LIBS)
 client_SOURCES = src/client.c
 client_LDADD = libautocommit.la $(EVENT_LIBS) $(GIT_LIBS)

@@ -6,6 +6,8 @@
 #include "repo.h"
 #include "ensure.h"
 
+#include <event2/bufferevent.h>
+
 
 #include <git2/diff.h>
 #include <git2/refs.h>
@@ -41,7 +43,7 @@ struct commit_info {
 
 #define BLOCKSIZE 512
 
-static void queue_commit(CC ctx);
+static void queue_commit(void);
 
 void just_exit() {
 	exit(0);
@@ -117,7 +119,7 @@ on_accept(struct evconnlistener *listener,
 }
 
 static
-void maybe_commit(CC ctx, u32 lines, u32 words, u32 characters);
+void maybe_commit(u32 lines, u32 words, u32 characters);
 
 // don't cache the head, because other processes could commit to the repository while we're running!
 static git_commit* get_head(void) {
@@ -142,7 +144,7 @@ static git_commit* get_head(void) {
 	return head;
 }
 
-static void queue_commit(CC ctx) {
+static void queue_commit(void) {
 	git_diff* diff = NULL;
 	git_tree* headtree = NULL;
 
@@ -371,7 +373,7 @@ static void queue_commit(CC ctx) {
 	{ char buf[0x200];
 		write(1, buf, snprintf(buf,0x100,"checking lwc %d %d %d\n",lines,words,characters));
 	}
-	maybe_commit(ctx, lines, words, characters);
+	maybe_commit(lines, words, characters);
 }
 
 static void post_pre_commit(struct bufferevent* conn);
@@ -462,7 +464,7 @@ static void commit_later(void* arg) {
 	commit_now((struct bufferevent*)arg);
 }
 
-static void maybe_commit(CC ctx, u32 lines, u32 words, u32 characters) {
+static void maybe_commit(u32 lines, u32 words, u32 characters) {
 	/* if between 1 and 300, go between 3600 and 300s,
 		 if between 300 and 600, go between 300 and 60s
 		 if between 600 and 6000, go between 60 and 0 */
