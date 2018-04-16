@@ -1,4 +1,5 @@
 #include "continuation.h"
+#include "eventbase.h"
 #include <event2/event.h>
 
 void continuation_run(struct continuation c) {

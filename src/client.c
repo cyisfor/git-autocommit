@@ -235,7 +235,7 @@ void spawn_server(void) {
 			}
 			evtimer_del(trying);
 			// call check_init directly, instead of wasting time with execve
-			check_init(base, sock);
+			check_init(sock);
 
 			// already started out dispatch in the parent process
 			// now we're the server, so just go back to the loop
@@ -335,6 +335,8 @@ int main(int argc, char *argv[])
 	// now everything written to "message" goes to stdout (emacs)
 	// while stdout/err goes to a log
 
+	eventbase_init();
+
 	void bye(const char* fmt, ...) {
 		va_list args;
 		va_start(args,fmt);
@@ -388,8 +390,6 @@ int main(int argc, char *argv[])
 		 if ECONNREFUSED, try binding
 		 if bound, listen, fork and hand over the socket, then go back to connecting
 	*/
-
-	base = event_base_new();
 
 	trying = evtimer_new(base, &try_connect);
 	evtimer_add(trying, NULL);

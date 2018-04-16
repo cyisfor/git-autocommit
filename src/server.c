@@ -1,10 +1,10 @@
+#include "eventbase.h"
+
 #include "activity.h"
 #include "check.h"
 #include "repo.h"
 #include "net.h"
 #include "note.h"
-
-#include <uv.h>
 
 #include <assert.h>
 #include <unistd.h> // getcwd
@@ -30,9 +30,10 @@ int main(int argc, char *argv[])
 	net_set_addr();
 	int sock = net_bind();
 	if(sock == -1) exit(1);
+	eventbase_init();
 	check_init(sock);
 
-	uv_run(uv_default_loop(), UV_RUN_DEFAULT);
+	event_base_dispatch(base);
 
 	return 0;
 }
