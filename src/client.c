@@ -57,6 +57,7 @@ void move_to(int loc, ...) {
 
 typedef uint16_t u16;
 
+static
 void setuplog(void) {
 	if(NULL != getenv("ferrets")) return;
 	int logloc = open_home();
@@ -72,6 +73,7 @@ void setuplog(void) {
 }
 
 int server_pid = -1;
+static
 void onsig(int signal) {
 	kill(server_pid,signal);
 	exit(signal);
@@ -85,8 +87,7 @@ struct event* trying = NULL;
 
 int tries = 0;
 
-bool reconnect = false;
-
+static
 void kill_remote(struct bufferevent* conn) {
 	printf("Killing remote... %d\n", net_pid(sock));
 	reconnect = false;
@@ -94,6 +95,7 @@ void kill_remote(struct bufferevent* conn) {
 	bufferevent_free(conn);
 }
 
+static
 void on_events(struct bufferevent *conn, short events, void *ptr) {
 	if(events & BEV_EVENT_CONNECTED) {
 		puts("connect okay.");
@@ -110,9 +112,10 @@ void on_events(struct bufferevent *conn, short events, void *ptr) {
 	}
 }
 
-
+static
 enum operations op;
 
+static
 void get_reply(struct bufferevent *conn, void *ctx) {
 	struct evbuffer* input = bufferevent_get_input(conn);
 	struct info_message im;
@@ -124,7 +127,7 @@ void get_reply(struct bufferevent *conn, void *ctx) {
 		}
 		int n = evbuffer_remove(input, &im, sizeof(im));
 		assert(n == sizeof(im));
-		uv_timer_stop(&trying);
+		evtimer_del(trying);
 
 		printf("Server Info: pid %d (%d)\n"
 					 "Lines %lu Words %lu Characters %lu\n",
@@ -160,22 +163,6 @@ void get_reply(struct bufferevent *conn, void *ctx) {
 		abort();
 	};
 }
-
-void retry(void) {
-	kill_remote(conn);
-	return try_connect();
-}
-
-
-void on_connect(void) {
-	tries = 0;
-	uv_timer_stop(&trying);
-
-	const uv_buf_t dest = { (char*)&op, 1 };
-	uv_write(&writing, (uv_stream_t*) &conn, &dest, 1, await_reply);
-}
-
-
 
 jmp_buf start_watcher;
 
@@ -240,7 +227,7 @@ void spawn_server(void) {
 			// call check_init directly, instead of wasting time with execve
 			check_init(sock);
 
-			// already started out uv_run in the parent process
+			// already started out dispatch in the parent process
 			// now we're the server, so just go back to the loop
 			// forget about longjmp that's just for the watcher process
 			return;
@@ -257,15 +244,18 @@ void spawn_server(void) {
 	return reconnect(sock); // we should be able to connect right away since listen() already called
 }
 
-
 static
 void try_connect() {
-	reconnect(net_connect());
+	return reconnect(net_connect());
 }
 
+static
 void wrote_response(struct bufferevent* conn, void* arg) {
 	bufferevent_setcb(conn, get_reply, NULL, on_event, NULL);
 	bufferevent_setwatermark(conn, EV_READ, 1, 1 + sizeof(struct info_message));
+	bufferevent_disable(EV_WRITE);
+	bufferevent_enable(EV_READ);
+}
 
 static
 void reconnect(int sock) {
@@ -289,6 +279,7 @@ void reconnect(int sock) {
 		bufferevent_setcb(conn, get_reply, wrote_response, on_event, NULL);
 		bufferevent_setwatermark(conn, EV_WRITE, 1, 1);
 		bufferevent_write(conn, &op, 1);
+		bufferevent_enable(EV_WRITE);
 	} else {
 		perror("um");
 		int pid = net_pid(sock);
@@ -313,7 +304,7 @@ int main(int argc, char *argv[])
 
 	if(0 != (server_pid = setjmp(start_watcher))) {
 		// keep our retarded watcher nice and retardedly simple,
-		// with no uv_loop hanging out there.
+		// with no libevent loop hanging out there.
 		assert(server_pid>0);
 		printf("watching PID %d\n",server_pid);
 		signal(SIGTERM,onsig);
@@ -388,17 +379,13 @@ int main(int argc, char *argv[])
 		 if bound, listen, fork and hand over the socket, then go back to connecting
 	*/
 
-	evtimer_add(evtimer_new(event_base, &try_connect
-	writing.data = &conn;
-	uv_pipe_init(uv_default_loop(), &conn, 1);
+	base = event_base_new();
 
-	uv_timer_init(uv_default_loop(),&trying);
-	trying.data = &conn;
+	trying = evtimer_new(base, &try_connect);
+	evtimer_add(base, trying);
 
 	debugging_fork = getenv("debugfork") != NULL;
 
-	csucks = try_connect;
-	uv_timer_start(&trying, (void*)try_connect, 0, 200);
-	uv_run(uv_default_loop(), UV_RUN_DEFAULT);
+	event_base_dispatch(base);
 	return 0;
 }

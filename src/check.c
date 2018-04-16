@@ -27,19 +27,10 @@
 
 typedef uint32_t u32;
 
-struct check_context {
-	uv_tcp_t stream;
-	size_t checked; // parsed messages up to here
-	size_t read; // chars read so far
-	size_t space; // space in buffer
-	char* buf;
-};
-
-
 // this should be global, so that it doesn't commit several times one for each connection,
 // and so that it doesn't abort committing if a connection dies
 struct commit_info {
-	uv_timer_t committer;
+	struct event* committer;
 	time_t next_commit;
 	u32 lines;
 	u32 words;
@@ -47,39 +38,6 @@ struct commit_info {
 } ci = {};
 
 #define BLOCKSIZE 512
-
-typedef struct check_context *CC;
-
-static void alloc_cb(uv_handle_t* handle, size_t size, uv_buf_t* ret) {
-	CC ctx = (CC) handle;
-	size_t unchecked = ctx->read - ctx->checked;
-	if(unchecked < ctx->checked) {
-		// consolodate by removing old stuff (not overlapping)
-		size_t canremove = (ctx->read / BLOCKSIZE) * BLOCKSIZE;
-		if(canremove > 0) {
-			memcpy(ctx->buf, ctx->buf + canremove, unchecked);
-			ctx->checked = 0;
-			ctx->read = unchecked;
-			ctx->space -= canremove;
-			// should be able to reuse instead of shrinking
-			//ctx->buf = realloc(ctx->buf, ctx->space);
-		}
-	}
-	if(ctx->read + size > ctx->space) {
-		ctx->space += BLOCKSIZE;
-		assert(ctx->space > 0);
-		ctx->buf = realloc(ctx->buf, ctx->space);
-	}
-	ret->base = ctx->buf + ctx->read;
-	ret->len = ctx->space - ctx->read;
-}
-
-static void cleanup(uv_handle_t* h) {
-	CC ctx = (CC) h;
-	free(ctx->buf);
-	free(ctx);
-	//puts("cleaned up");
-}
 
 static void queue_commit(CC ctx);
 
@@ -91,83 +49,64 @@ void just_exit() {
 
 static void commit_now(CC ctx);
 
-static void on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
-	CC ctx = (CC) stream;
-	if(nread == UV_EOF) {
-		uv_close((uv_handle_t*)stream, cleanup);
-		return;
-	}
-	if(nread < 0) {
-		puts("Some weird error reading");
-		uv_read_stop(stream);
-		return;
-	}
-	ctx->read += nread;
 
+static void
+on_events(struct bufferevent *conn, short events, void *ctx) {
+	if(events & BEV_EVENT_ERROR) {
+		perror("connection error");
+	} else if(events & BEV_EVENT_EOF) {
+		puts("connection closed");
+	} else {
+		return;
+	} 
+	bufferevent_free(conn);
+}
+
+static void on_read(struct bufferevent* conn, void* udata) {
+	struct evbuffer* input = bufferevent_get_input(conn);
+	size_t avail = evbuffer_get_length(input);
+	buffereevent_enable(conn, EV_WRITE);
 	// now read all the messages we see.
-	for(;;) {
-		// break if there isn't a message to be read
-		if(ctx->read < ctx->checked + 1) break;
-		
-		// no ntohs needed since it'd be silly not to run client/server on the same machine.
-
-		const uv_buf_t ok = { "\0", 1 };
-		
-		switch(ctx->buf[ctx->checked]) {
+	while(avail > 0) {
+		char op;
+		evbuffer_remove(input, &op, 1);
+		--avail;
+		switch(op) {
 		case QUIT:
-		{
-			uv_write_t* req = malloc(sizeof(uv_write_t));
-			uv_write(req, stream, &ok, 1, (void*)just_exit);
-		}
-		return;
+			quitting = true;
+			bufferevent_write(conn, &op, 1);
+			return;
 		case FORCE:
-		{
-			commit_now(ctx);
-			uv_write_t* req = malloc(sizeof(uv_write_t));
-			uv_write(req, stream, &ok, 1, (void*)free);
-		}
-		break;
-		case INFO:
-		{
+			commit_now(input);
+			bufferevent_write(conn, &op, 1);
+			break;
+		case INFO: {
 			pid_t pid = getpid();
 			struct info_message im = {
 				pid, ci.lines, ci.words, ci.characters, ci.next_commit
 			};
-			uv_buf_t buf = { (char*)&im, sizeof(im) };
-			uv_write_t* req = malloc(sizeof(uv_write_t));
-			uv_write(req, stream, &buf, 1, (void*)free);
+			bufferevent_write(conn, &im, sizeof(im));
 		}
 		break;
-		case ADD:
-		{ 
-			queue_commit(ctx);
-			uv_write_t* req = malloc(sizeof(uv_write_t));
-			uv_write(req, stream, &ok, 1, (void*)free);
+		case ADD: { 
+			queue_commit();
+			bufferevent_write(conn, &op, 1);
 		}
 		break;
 		default:
 			error(23,0,"bad message %d\n",ctx->buf[ctx->checked]);
 		};
-		++ctx->checked; // move past this message.
 	}
 }
 
-static void on_accept(uv_stream_t* server, int err) {
-	assert(err >= 0);
-	CC ctx = (CC) malloc(sizeof(struct check_context));
-	uv_tcp_init(uv_default_loop(), &ctx->stream);
-	int res = uv_accept(server, (uv_stream_t*) &ctx->stream);
-	if(res == UV_EAGAIN) {
-		free(ctx);
-		puts("ugh");
-		return;
-	}
-	if(res != 0) {
-		error(-res,-res,"um");
-	}
-	ctx->buf = NULL;
-	ctx->space = ctx->read = ctx->checked = 0;
-	uv_read_start((uv_stream_t*)ctx, alloc_cb, on_read);
+static void
+on_accept(struct evconnlistener *listener,
+					evutil_socket_t fd, struct sockaddr *address, int socklen,
+					void *ctx) {
+	struct bufferevent* conn = bufferevent_socket_new(base, fd,
+																										BEV_OPT_CLOSE_ON_FREE);
+	buffereevent_setcb(conn, on_read, NULL, on_events, NULL);
+	buffereevent_enable(conn, EV_READ);
 	activity_poke();
 }
 
