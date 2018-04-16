@@ -461,7 +461,7 @@ static void post_pre_commit(struct bufferevent* conn) {
 	HOOK_RUN("post-commit",nothing);
 }
 
-static void commit_later(void* arg) {
+static void commit_later(evutil_socket_t nope, short events, void *arg) {
 	commit_now((struct bufferevent*)arg);
 }
 
@@ -545,7 +545,7 @@ void check_init(int sock) {
 	activity_init();
 	hooks_init();
 
-	struct evconnlistener* listener = evconnlistener_new(
+	evconnlistener_new(
 		base,
 		on_accept, NULL,
 		LEV_OPT_CLOSE_ON_EXEC |

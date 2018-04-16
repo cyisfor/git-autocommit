@@ -20,3 +20,14 @@ server_SOURCES = src/server.c
 server_LDADD = libautocommit.la $(EVENT_LIBS) $(GIT_LIBS) $(LIBS)
 client_SOURCES = src/client.c 
 client_LDADD = libautocommit.la $(EVENT_LIBS) $(GIT_LIBS) $(LIBS)
+
+BUILT_SOURCES = my_cflags.h
+
+# need the source locations, for hooks that want to compile with our headers
+# AC_DEFINE fails btw
+
+my_cflags.h: Makefile.am
+	echo '#define MY_CFLAGS "-I'$(realpath $(srcdir))'/src" '$(EVENT_CFLAGS) > $@.temp
+	echo '#define MY_LDFLAGS "'$(realpath libautocommit.la) $(EVENT_LIBS)'"' >> $@.temp
+	mv $@.temp $@
+

@@ -63,6 +63,8 @@ void read_from_signalfd(evutil_socket_t sfd, short events, void * arg) {
 			int res = WEXITSTATUS(status);
 			if(res != 0) {
 				erra("exited with %d",res);
+			} else {
+				erra("exited all nice");
 			}
 		} else {
 			erra("whu? %d",status);
@@ -117,9 +119,10 @@ void checkpid_init(void) {
 	ensure0(sigprocmask(SIG_BLOCK, &blocked, NULL));
 
 	int s = signalfd(-1, &blocked, 0);
+	evutil_make_socket_nonblocking(s);
 	ensure_ge(s,0);
-	struct event* ev = event_new(base, -1,
-															 EV_READ|EV_PERSIST|EV_ET,
+	struct event* ev = event_new(base, s,
+															 EV_READ|EV_PERSIST,
 															 (void*)read_from_signalfd, NULL);
 	event_add(ev, NULL);
 }

@@ -1,4 +1,4 @@
-#include "source_location.h"
+#include "my_cflags.h"
 
 #include "ensure.h"
 #include "repo.h"
@@ -10,7 +10,7 @@
 
 #include <semaphore.h>
 
-#include <dlfcn.h> // dlopen, dlsym
+#include <ltdl.h> // lt_dlopen, lt_dlsym
 #include <unistd.h> // fork, exec*
 #include <stdarg.h> // va_*
 #include <stdio.h>
@@ -64,36 +64,33 @@ static void load(const char* name, size_t nlen) {
 	csource[nlen+1] = 'c';
 	csource[nlen+2] = '\0';
 
-	char so[0x100];
-	memcpy(so+2,name,nlen);
-	so[0] = '.';
-	so[1] = '/';
-	so[nlen+2] = '.';
-	so[nlen+3] = 's';
-	so[nlen+4] = 'o';
-	so[nlen+5] = '\0';
+	char so[0x100] = "./lib";
+	memcpy(so+5,name,nlen);
+	so[nlen+5] = '.';
+	so[nlen+6] = 'l';
+	so[nlen+7] = 'a';
+	so[nlen+8] = '\0';
 
 	// todo: reinitialize if the source changes...
 
 	void build_so() {
 		int pid = fork();
 		if(pid == 0) {
-			char* cc = getenv("CC");
-			if(cc == NULL) cc = "cc";
-			char* args[] = {
-				cc,
-				PLUGIN_FLAGS
-				"-fPIC",
-				"-shared",
-				"-I", SOURCE_LOCATION, // -D this
-				"-o",
-				so,
-				csource,
-				NULL
-			};
-			execvp(cc,args);
+			setenv("LIBTOOL","libtool",0);
+			setenv("CC","cc",0);
+			setenv("src",csource,1);
+			setenv("dst",so,1);
+			setenv("CFLAGS",MY_CFLAGS,1); // def this
+			setenv("LDFLAGS",MY_LDFLAGS,1); // def this
+			int res = system("${LIBTOOL} --mode=link --tag=CC ${CC} -shared -fPIC ${CFLAGS} -rpath `pwd` -o ${dst} ${src} ${LDFLAGS}");
+			if(res == 0) {
+				puts("yay, compiled!");
+			} else {
+				printf("boo, compile fail %d\n",res);
+			}
+			exit(res);
 		}
-		checkpid(pid, "gcc %s",name);
+		waitpid(pid, NULL, 0);
 	}
 
 	struct hook* hook = NULL;
@@ -108,20 +105,28 @@ static void load(const char* name, size_t nlen) {
 	}
 
 	void load_so() {
-		void* dll = dlopen(so,RTLD_LAZY | RTLD_LOCAL);
-		assert(dll);
-		const char* e = dlerror();
-		if(e != NULL) {
-			perror(e);
+		lt_dladvise advice;
+		int res = lt_dladvise_init(&advice);
+		assert(res == 0);
+		lt_dladvise_local(&advice);
+		lt_dlhandle dll = lt_dlopenadvise(so,advice);
+		if(!dll) {
+			puts(lt_dlerror());
 			abort();
 		}
+		lt_dladvise_destroy(&advice);
+		assert(dll);
+
 		typedef void* (*initter)(void);
-		initter init = (initter) dlsym(dll,"init");
+		initter init = (initter) lt_dlsym(dll,"init");
 		init_hook();
 		if(init) {
 			hook->u.run.data = init();
 		}
-		hook->u.run.f = (runner) dlsym(dll,"run");
+		hook->u.run.f = (runner) lt_dlsym(dll,"run");
+		if(hook->u.run.f == NULL) {
+			puts("no run...");
+		}
 		hook->islib = true;
 		return;
 	}
@@ -167,7 +172,7 @@ void hook_run(const char* name, const size_t nlen, struct continuation after) {
 	}
 	struct hook* hook = hooks+i;
 
-	if(hook->islib) {
+	if(hook->islib && hook->u.run.f) {
 		hook->u.run.f(hook->u.run.data, after);
 	} else {
 		// the PID cannot be allowed to exit before we get our after handler in the list
@@ -194,9 +199,11 @@ void hook_run(const char* name, const size_t nlen, struct continuation after) {
 			char* args[] = { hook->u.path, NULL };
 			execv(hook->u.path,args);
 			if(errno == ENOEXEC || errno == EACCES) {
-				perror("trying shell");
+				perror("trying shell, since");
+				printf("hook %s\n",hook->u.path);
 				char* args[] = { "sh", hook->u.path, NULL };
 				execv("/bin/sh",args);
+				perror("nope");
 			}
 			perror(hook->u.path);
 			abort();
@@ -205,6 +212,7 @@ void hook_run(const char* name, const size_t nlen, struct continuation after) {
 		checkpid(pid, "hook %s", name);
 		if(after.func) {
 			checkpid_after(pid, after);
+			printf("ready to go after %d\n",pid);
 			sem_post(ready);
 			munmap(mem,sizeof(sem_t));
 		}
@@ -218,6 +226,7 @@ void hooks_init(void) {
 	assert0(chdir("hooks"));
 	setenv("LD_LIBRARY_PATH",".",1);
 	char buf[PATH_MAX];
+	lt_dlinit();
 	load(LITLEN("pre-commit"));
 	load(LITLEN("post-commit"));
 	assert0(chdir(git_repository_workdir(repo)));

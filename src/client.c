@@ -211,8 +211,8 @@ void spawn_server(void) {
 	printf("Got bound socket %d. Starting server...\n",sock);
 
 	/*
-		1) fork(), child is the server. parent...
-		2) fork(), child is the client. parent is the watcher.
+		1) fork(), parent is the client. child...
+		2) fork(), parent is the watcher. child is the server.
 		*/
 	
 	// do not unblock signals, since we're also duping our signalfd.
@@ -248,6 +248,9 @@ void spawn_server(void) {
 			evtimer_del(trying);
 			// call check_init directly, instead of wasting time with execve
 			check_init(sock);
+			puts("server intialized.");
+
+			reconnecting = false;
 
 			// already started out dispatch in the parent process
 			// now we're the server, so just go back to the loop
@@ -260,7 +263,7 @@ void spawn_server(void) {
 	}
 	assert(server_pid > 0);
 
-	printf("starting server %d\n",server_pid);
+	printf("started server %d. We client now.\n",server_pid);
 	net_forkhack(server_pid);
 	//usleep(100000); // XXX: mysterious race condition... activity on the client's sockets created AFTER the server is forked, are reported to the server process?
 	return reconnect(sock); // we should be able to connect right away since listen() already called

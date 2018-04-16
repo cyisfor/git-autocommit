@@ -50,12 +50,15 @@ int net_connect(void) {
 }
 
 static struct ucred ucred;
+static bool gotcred = false;
+
 static void getcred(int sock) {
-	static bool gotcred = false;
 	if(gotcred) return;
 	int len = sizeof(ucred);
-	assert(0 == getsockopt(sock, SOL_SOCKET, SO_PEERCRED, &ucred, &len));
-	gotcred = true;
+	int res = getsockopt(sock, SOL_SOCKET, SO_PEERCRED, &ucred, &len);
+	if(res) {
+		gotcred = true;
+	}
 }
 
 /* if you bind a unix socket, then pass it to a child process, then close the socket in the
@@ -72,6 +75,8 @@ void net_forkhack(pid_t pid) {
 pid_t net_pid(int sock) {
 	if(forkhack != -1)
 		return forkhack;
-	getcred(sock);	
-	return ucred.pid;
+	getcred(sock);
+	if(gotcred)
+		return ucred.pid;
+	return 0;
 }
