@@ -5,7 +5,7 @@ AC_CONFIG_AUX_DIR(build-aux)
 AC_CONFIG_MACRO_DIR(m4)
 AC_CONFIG_HEADERS([config.h])
 AM_INIT_AUTOMAKE([foreign subdir-objects])
-LT_INIT([disable-shared])
+LT_INIT([disable-static])
 
 # Checks for programs.
 AC_PROG_CC
@@ -15,7 +15,7 @@ PKG_PROG_PKG_CONFIG
 PKG_CHECK_MODULES(GIT, libgit2)
 PKG_CHECK_MODULES(EVENT, libevent)
 
-AC_CHECK_LIB(dl, dlopen)
+AC_CHECK_LIB(ltdl, lt_dlopen)
 
 # Checks for header files.
 AC_CHECK_HEADERS([sys/socket.h unistd.h])
@@ -35,11 +35,6 @@ AC_FUNC_MALLOC
 AC_FUNC_MMAP
 AC_FUNC_REALLOC
 AC_CHECK_FUNCS([dup2 mkdir munmap realpath setenv socket])
-
-# need the source location, for hooks that want to compile with our headers
-src=$(realpath ${srcdir}) # actually objdir...
-# AC_DEFINE fails btw
-echo '#define SOURCE_LOCATION "'${src}'"' > source_location.h
 
 AC_CONFIG_FILES([Makefile])
 AC_OUTPUT

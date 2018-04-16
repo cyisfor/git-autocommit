@@ -375,11 +375,18 @@ int main(int argc, char *argv[])
 	char bigpath[PATH_MAX];
 	size_t plen;
 	if(op == ADD) {
-		path = getenv("file");
+		path = getenv("add");
 		if(path == NULL) {
 			bye("no file provided");
 		}
-		assert(NULL!=realpath(path,bigpath));
+		puts("bast");
+		puts(path);
+		const char* derp = realpath(path,bigpath);
+		if(derp == NULL) {
+			printf("'%s' is not a real path\n",path);
+			puts(get_current_dir_name());
+		}
+		assert(NULL!=derp);
 		path = bigpath;
 		plen = strlen(path);
 	} else {
