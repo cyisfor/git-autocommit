@@ -5,10 +5,11 @@
 #include "net.h"
 #include "check.h"
 
-
 #include <sys/socket.h> //
 #include <sys/un.h> //
 #include <sys/resource.h> // setrlimit
+
+#include <limits.h> // PATH_MAX
 
 
 #include <setjmp.h>
