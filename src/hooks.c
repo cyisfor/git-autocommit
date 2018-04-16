@@ -158,7 +158,7 @@ void hook_run(const char* name, const size_t nlen, struct continuation after) {
 	}
 	if(i == nhooks) {
 		// no hook
-		continuation_run(after)
+		continuation_run(after);
 		return;
 	}
 	struct hook* hook = hooks+i;
@@ -169,7 +169,7 @@ void hook_run(const char* name, const size_t nlen, struct continuation after) {
 		// the PID cannot be allowed to exit before we get our after handler in the list
 		sem_t* ready;
 		void* mem;
-		if(after) {
+		if(after.func) {
 			// ready must be ALLOCATED in shared memory, or it's not multiprocess
 			// fuck sem_open
 			mem = mmap(NULL,sizeof(sem_t),PROT_WRITE,MAP_ANONYMOUS|MAP_SHARED,-1,0);
@@ -199,7 +199,7 @@ void hook_run(const char* name, const size_t nlen, struct continuation after) {
 		}
 		
 		checkpid(pid, "hook %s", name);
-		if(after) {
+		if(after.func) {
 			checkpid_after(pid, after);
 			sem_post(ready);
 			munmap(mem,sizeof(sem_t));

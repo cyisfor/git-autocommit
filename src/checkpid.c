@@ -13,7 +13,7 @@
 
 struct after {
 	int pid;
-	uv_async_t* async;
+	struct continuation later;
 	struct after* prev;
 	struct after* next;
 };
@@ -68,8 +68,7 @@ static void get_reply(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
 				if(cur->prev) {
 					cur->prev->next = cur->next;
 				}
-				// not safe to free async until it is received
-				uv_async_send(cur->async);
+				continuation_run(cur->later);
 				free(cur);
 				break;
 			}
@@ -78,10 +77,10 @@ static void get_reply(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
 	}
 }				
 
-void checkpid_after(int pid, uv_async_t* async) {
+void checkpid_after(int pid, struct continuation later) {
 	struct after* a = malloc(sizeof(struct after));
 	a->pid = pid;
-	a->async = async;
+	a->later = later;
 	a->next = afters;
 	a->prev = NULL;
 	if(afters) {

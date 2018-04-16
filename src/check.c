@@ -394,7 +394,10 @@ static void commit_now(struct bufferevent* conn) {
 		return;
 	}
 
-	HOOK_RUN("pre-commit",post_pre_commit, conn);
+	struct continuation after = {
+		post_pre_commit, conn
+	};
+	HOOK_RUN("pre-commit",after);
 	// now-ish
 }
 
@@ -449,7 +452,8 @@ static void post_pre_commit(struct bufferevent* conn) {
 	git_tree_free(tree);
 	git_signature_free(me);
 
-	HOOK_RUN("post-commit",NULL);
+	struct continuation nothing = {};
+	HOOK_RUN("post-commit",nothing);
 }
 
 static void commit_later(uv_timer_t* handle) {
