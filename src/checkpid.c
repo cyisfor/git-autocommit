@@ -1,3 +1,5 @@
+#include "eventbase.h"
+
 #include "ensure.h"
 
 #include "checkpid.h"
@@ -118,12 +120,8 @@ void checkpid_init(void) {
 	ensure_ge(s,0);
 	struct event* ev = event_new(base, -1,
 															 EV_READ|EV_PERSIST|EV_ET,
-															 (void*)get_reply, NULL);
+															 (void*)read_from_signalfd, NULL);
 	event_add(ev, NULL);
-	ensure0(uv_pipe_init(uv_default_loop(), &sfd, 0));
-	ensure0(uv_pipe_open(&sfd, s));
-	struct bufferevent* b = 
-	uv_read_start((uv_stream_t*)&sfd, alloc_cb, get_reply);
 }
 
 void checkpid(int pid, const char* fmt, ...) {

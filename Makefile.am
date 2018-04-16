@@ -1,5 +1,5 @@
 ACLOCAL_AMFLAGS = -I m4
-AM_CFLAGS = -fdiagnostics-color=always $(EVENT_CFLAGS) $(GIT_CFLAGS)
+AM_CFLAGS = -fdiagnostics-color=always $(EVENT_CFLAGS) $(GIT_CFLAGS) -pthread
 
 lib_LTLIBRARIES = libautocommit.la
 
@@ -10,6 +10,7 @@ libautocommit_la_SOURCES = \
 	src/repo.c \
 	src/hooks.c \
 	src/checkpid.c \
+	src/eventbase.c \
 	src/note.c
 
 bin_PROGRAMS = server client
