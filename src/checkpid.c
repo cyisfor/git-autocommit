@@ -29,6 +29,7 @@ void read_from_signalfd(evutil_socket_t sfd, short events, void * arg) {
 		ssize_t amt = read(sfd, buf, 0x100);
 		if(amt == 0) break;
 		if(amt < 0) {
+			if(errno == EINTR) continue;
 			if(errno != EAGAIN) {
 				perror("read signalfd");
 				abort();
@@ -98,7 +99,6 @@ void checkpid_after(int pid, struct continuation later) {
 }
 
 static sigset_t blocked;
-static uv_pipe_t sfd;
 
 // eh... only useful if you're about to exec.
 int checkpid_fork() {
@@ -116,6 +116,10 @@ void checkpid_init(void) {
 
 	int s = signalfd(-1, &blocked, 0);
 	ensure_ge(s,0);
+	struct event* ev = event_new(base, -1,
+															 EV_READ|EV_PERSIST|EV_ET,
+															 (void*)get_reply, NULL);
+	event_add(ev, NULL);
 	ensure0(uv_pipe_init(uv_default_loop(), &sfd, 0));
 	ensure0(uv_pipe_open(&sfd, s));
 	struct bufferevent* b = 
