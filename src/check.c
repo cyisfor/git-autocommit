@@ -30,7 +30,7 @@ typedef uint32_t u32;
 // this should be global, so that it doesn't commit several times one for each connection,
 // and so that it doesn't abort committing if a connection dies
 struct commit_info {
-	struct event* committer;
+	struct event* later;
 	time_t next_commit;
 	u32 lines;
 	u32 words;
@@ -47,7 +47,7 @@ void just_exit() {
 
 #pragma GCC diagnostic ignored "-Wtrampolines"
 
-static void commit_now(CC ctx);
+static void commit_now(struct bufferevent* conn);
 
 bool quitting = false;
 
@@ -81,7 +81,7 @@ static void on_read(struct bufferevent* conn, void* udata) {
 			bufferevent_write(conn, &op, 1);
 			return;
 		case FORCE:
-			commit_now(input);
+			commit_now(conn);
 			bufferevent_write(conn, &op, 1);
 			break;
 		case INFO: {
@@ -372,7 +372,7 @@ static void queue_commit(CC ctx) {
 	maybe_commit(ctx, lines, words, characters);
 }
 
-static void post_pre_commit(uv_async_t* handle);
+static void post_pre_commit(struct bufferevent* conn);
 
 static
 int check(const char *path, unsigned int status_flags, void *payload) {
@@ -456,8 +456,8 @@ static void post_pre_commit(struct bufferevent* conn) {
 	HOOK_RUN("post-commit",nothing);
 }
 
-static void commit_later(uv_timer_t* handle) {
-	commit_now((CC)handle->data);
+static void commit_later(void* arg) {
+	commit_now((struct bufferevent*)arg);
 }
 
 static void maybe_commit(CC ctx, u32 lines, u32 words, u32 characters) {
@@ -520,24 +520,30 @@ static void maybe_commit(CC ctx, u32 lines, u32 words, u32 characters) {
 		char buf[0x200];
 		write(1,buf,snprintf(buf,0x200,"waiting %.2f\n",d)); // weird stdout fd
 		
-		uv_timer_stop(&ci.committer);
+		evtimer_del(ci.later);
 		ci.next_commit = now + d;
 		ci.words = words;
 		ci.characters = characters;
-		ci.committer.data = ctx;
-		uv_timer_start((uv_timer_t*)&ci, commit_later, d * 1000 + 1, 0);
+
+		const struct timeval timeout = {
+			.tv_sec = d + 1
+		};
+		evtimer_add(ci.later,&timeout);
 	}
 }
 
 void check_init(int sock) {
-	uv_timer_init(uv_default_loop(), &ci.committer);
+	conn = bufferevent_socket_new(base, sock, BEV_OPT_CLOSE_ON_FREE);
+	ci.later = evtimer_new(base, commit_later, conn);
 
 	activity_init();
 	hooks_init();
 
-	static uv_pipe_t server;
-	uv_pipe_init(uv_default_loop(), &server, 1);
-	assert(0==uv_pipe_open(&server, sock));
-
-	assert(0==uv_listen((uv_stream_t*)&server, 0x10, on_accept));
+	struct evconnlistener* listener = evconnlistener_new(
+		base,
+		on_accept,
+		LEV_OPT_CLOSE_ON_EXEC |
+		LEV_OPT_CLOSE_ON_FREE,
+		10,
+		sock);
 }
