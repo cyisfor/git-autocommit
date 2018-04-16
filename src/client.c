@@ -1,10 +1,10 @@
 #define _GNU_SOURCE
+#include "eventbase.h"
 #include "ops.h"
 #include "repo.h"
 #include "net.h"
 #include "check.h"
 
-#include <libevent.h>
 
 #include <sys/socket.h> //
 #include <sys/un.h> //
@@ -84,13 +84,15 @@ static
 int sock = -1;
 
 static
-struct event_base* base = NULL;
-
-static
 struct bufferevent* conn = NULL;
 
 static
 struct event* trying = NULL;
+
+static const struct timeval trying_timeout = {
+	.tv_sec = 0,
+	.tv_usec = 5000000
+};
 
 static
 int tries = 0;
@@ -113,7 +115,7 @@ void on_events(struct bufferevent *conn, short events, void *ptr) {
 	} else if(events & (BEV_EVENT_ERROR|BEV_EVENT_EOF)) {
 		puts("closing...");
 		if(reconnect) {
-			evtimer_add(base, trying);
+			evtimer_add(trying, &trying_timeout);
 		} else {
 			event_base_loopexit(base, NULL);
 		}
@@ -296,7 +298,7 @@ void reconnect(int sock) {
 		}
 		close(sock);
 		// try again later, I guess...
-		evtimer_add(base, trying);
+		evtimer_add(trying, &trying_timeout);
 	}
 }
 
@@ -390,7 +392,7 @@ int main(int argc, char *argv[])
 	base = event_base_new();
 
 	trying = evtimer_new(base, &try_connect);
-	evtimer_add(base, trying);
+	evtimer_add(trying, NULL);
 
 	debugging_fork = getenv("debugfork") != NULL;
 
