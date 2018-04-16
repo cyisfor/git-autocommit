@@ -51,6 +51,8 @@ static void commit_now(struct bufferevent* conn);
 
 bool quitting = false;
 
+static struct event_base* base = NULL;
+
 static void
 on_events(struct bufferevent *conn, short events, void *ctx) {
 	if(events & BEV_EVENT_ERROR) {
@@ -532,7 +534,8 @@ static void maybe_commit(CC ctx, u32 lines, u32 words, u32 characters) {
 	}
 }
 
-void check_init(int sock) {
+void check_init(struct event_base* thebase, int sock) {
+	base = thebase;
 	conn = bufferevent_socket_new(base, sock, BEV_OPT_CLOSE_ON_FREE);
 	ci.later = evtimer_new(base, commit_later, conn);
 

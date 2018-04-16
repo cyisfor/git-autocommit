@@ -80,11 +80,19 @@ void onsig(int signal) {
 }
 
 
+static
 int sock = -1;
+
+static
 struct event_base* base = NULL;
+
+static
 struct bufferevent* conn = NULL;
+
+static
 struct event* trying = NULL;
 
+static
 int tries = 0;
 
 static
@@ -225,7 +233,7 @@ void spawn_server(void) {
 			}
 			evtimer_del(trying);
 			// call check_init directly, instead of wasting time with execve
-			check_init(sock);
+			check_init(base, sock);
 
 			// already started out dispatch in the parent process
 			// now we're the server, so just go back to the loop
