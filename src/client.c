@@ -403,8 +403,9 @@ int main(int argc, char *argv[])
 		 if bound, listen, fork and hand over the socket, then go back to connecting
 	*/
 
-	trying = evtimer_new(base, &try_connect);
-	evtimer_add(trying, NULL);
+	trying = evtimer_new(base, (void*)try_connect, NULL);
+	const struct timeval now = {};
+	evtimer_add(trying, &now);
 
 	debugging_fork = getenv("debugfork") != NULL;
 
