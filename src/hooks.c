@@ -1,3 +1,5 @@
+#include "source_location.h"
+
 #include "ensure.h"
 #include "repo.h"
 #include "hooks.h"
