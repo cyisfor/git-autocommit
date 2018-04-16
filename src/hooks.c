@@ -81,8 +81,9 @@ static void load(const char* name, size_t nlen) {
 			setenv("src",csource,1);
 			setenv("dst",so,1);
 			setenv("CFLAGS",MY_CFLAGS,1); // def this
+			system("exec ${LIBTOOL} --mode=compile --tag=CC ${CC} -shared -fPIC ${CFLAGS} -c -o ${src}.lo ${src}");
 			setenv("LDFLAGS",MY_LDFLAGS,1); // def this
-			int res = system("${LIBTOOL} --mode=link --tag=CC ${CC} -shared -fPIC ${CFLAGS} -rpath `pwd` -o ${dst} ${src} ${LDFLAGS}");
+			int res = system("exec ${LIBTOOL} --mode=link --tag=CC ${CC} -shared -fPIC ${CFLAGS} -rpath `pwd` -o ${dst} ${src}.lo ${LDFLAGS}");
 			if(res == 0) {
 				puts("yay, compiled!");
 			} else {

@@ -1,5 +1,5 @@
 ACLOCAL_AMFLAGS = -I m4
-AM_CFLAGS = -fdiagnostics-color=always $(EVENT_CFLAGS) $(GIT_CFLAGS) -pthread
+AM_CFLAGS = -fdiagnostics-color=always $(EVENT_CFLAGS) $(GIT_CFLAGS) -pthread -fPIC
 
 lib_LTLIBRARIES = libautocommit.la
 
