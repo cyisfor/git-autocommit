@@ -87,9 +87,19 @@ int tries = 0;
 
 bool reconnect = false;
 
+void kill_remote(struct bufferevent* conn) {
+	printf("Killing remote... %d\n", net_pid(sock));
+	reconnect = false;
+	kill(net_pid(sock),SIGTERM);
+	bufferevent_free(conn);
+}
+
 void on_events(struct bufferevent *conn, short events, void *ptr) {
 	if(events & BEV_EVENT_CONNECTED) {
 		puts("connect okay.");
+	} else if(events & (BEV_EVENT_TIMEOUT)) {
+		puts("timed out... killing server.");
+		kill_remote(conn);
 	} else if(events & (BEV_EVENT_ERROR|BEV_EVENT_EOF)) {
 		puts("closing...");
 		if(reconnect) {
@@ -100,12 +110,6 @@ void on_events(struct bufferevent *conn, short events, void *ptr) {
 	}
 }
 
-void kill_remote(struct bufferevent* conn) {
-	printf("Killing remote... %d\n", net_pid(sock));
-	reconnect = false;
-	kill(net_pid(sock),SIGTERM);
-	bufferevent_free(conn);
-}
 
 enum operations op;
 
@@ -157,15 +161,11 @@ void get_reply(struct bufferevent *conn, void *ctx) {
 	};
 }
 
-void retry(uv_timer_t* timer) {
-
-	csucks();
+void retry(void) {
+	kill_remote(conn);
+	return try_connect();
 }
 
-void await_reply(uv_write_t* req, int status) {
-	uv_read_start((uv_stream_t*)&conn, alloc_cb, get_reply);
-	uv_timer_start(&trying, (void*)retry, 1000000, 0);
-}
 
 void on_connect(void) {
 	tries = 0;
@@ -260,9 +260,12 @@ void spawn_server(void) {
 
 static
 void try_connect() {
-	kill_remote(conn);
 	reconnect(net_connect());
 }
+
+void wrote_response(struct bufferevent* conn, void* arg) {
+	bufferevent_setcb(conn, get_reply, NULL, on_event, NULL);
+	bufferevent_setwatermark(conn, EV_READ, 1, 1 + sizeof(struct info_message));
 
 static
 void reconnect(int sock) {
@@ -278,9 +281,20 @@ void reconnect(int sock) {
 	conn = bufferevent_socket_new(base, sock, BEV_OPT_CLOSE_ON_FREE);
 	
 	if(conn) {
-		bufferevent_setcb(conn, get_reply, NULL, on_event, NULL);
+		const struct timeval timeout = {
+			.tv_sec = 0,
+			.tv_usec = 500000
+		};
+		bufferevent_set_timeouts(conn, &timeout, &timeout);
+		bufferevent_setcb(conn, get_reply, wrote_response, on_event, NULL);
+		bufferevent_setwatermark(conn, EV_WRITE, 1, 1);
+		bufferevent_write(conn, &op, 1);
 	} else {
 		perror("um");
+		int pid = net_pid(sock);
+		if(pid > 0) {
+			kill(pid,SIGTERM);
+		}
 		close(sock);
 		// try again later, I guess...
 		evtimer_add(base, trying);
