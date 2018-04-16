@@ -78,86 +78,87 @@ void onsig(int signal) {
 }
 
 
-char buf[0x1000];
 int sock = -1;
-
-void alloc_cb(uv_handle_t* handle, size_t size, uv_buf_t* ret) {
-	ret->base = buf;
-	ret->len = 0x1000;
-}
-
-
-void (*csucks)(void) = NULL;
-
-void restart_when_closed(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
-	if(nread > 0) return;
-	if(nread != UV_ECONNRESET && nread != UV_EOF) {
-		printf("um %s\n",uv_strerror(nread));
-		abort();
-	}
-	uv_close((uv_handle_t*)stream, (void*)csucks);
-}
-
-int tries = 0;
-uv_timer_t trying;
-
-void kill_remote(uv_stream_t* stream, ssize_t err) {
-	printf("Killing remote... %s %ld %d\n",uv_strerror(err), err, net_pid(sock));
-	uv_read_stop(stream);
-	uv_close((uv_handle_t*)stream, (void*)csucks);
-	kill(net_pid(sock),SIGTERM);
-}
-
-enum operations op;
-
-void get_reply(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
-	uv_timer_stop(&trying);
-	if(op == INFO) {
-		if(nread != sizeof(struct info_message)) {
-			kill_remote(stream, nread);
-			return;
-		}
-		struct info_message* im = (struct info_message*)buf->base;
-
-		printf("Server Info: pid %d (%d)\n"
-					 "Lines %lu Words %lu Characters %lu\n",
-					 im->pid, net_pid(sock),
-					 im->lines, im->words, im->characters);
-		if(im->next_commit) {
-			printf(
-				"Next commit: %lu (in %ld)\n",
-				im->next_commit, im->next_commit - time(NULL));
-		} else {
-			puts("No commit scheduled");
-		}
-
-		uv_read_stop(stream);
-	} else {
-		if(nread == 0) return;
-		if(nread != 1) {
-			kill_remote(stream, nread);
-			return;
-		}
-		char res = *buf->base;
-		switch(res) {
-		case 0:
-			// success
-			uv_read_stop(stream);
-			break;
-		default:
-			printf("Got weirdness %d\n",res);
-			abort();
-		};
-	}
-}
-
-
 struct event_base* base = NULL;
 struct bufferevent* conn = NULL;
 struct event* trying = NULL;
 
+int tries = 0;
+
+bool reconnect = false;
+
+void on_events(struct bufferevent *conn, short events, void *ptr) {
+	if(events & BEV_EVENT_CONNECTED) {
+		puts("connect okay.");
+	} else if(events & (BEV_EVENT_ERROR|BEV_EVENT_EOF)) {
+		puts("closing...");
+		if(reconnect) {
+			evtimer_add(base, trying);
+		} else {
+			event_base_loopexit(base, NULL);
+		}
+	}
+}
+
+void kill_remote(struct bufferevent* conn) {
+	printf("Killing remote... %d\n", net_pid(sock));
+	reconnect = false;
+	kill(net_pid(sock),SIGTERM);
+	bufferevent_free(conn);
+}
+
+enum operations op;
+
+void get_reply(struct bufferevent *conn, void *ctx) {
+	struct evbuffer* input = bufferevent_get_input(conn);
+	struct info_message im;
+	size_t left = evbuffer_get_length(input);		
+	if(op == INFO) {
+		if(left != sizeof(struct info_message)) {
+			kill_remote(conn);
+			return;
+		}
+		int n = evbuffer_remove(input, &im, sizeof(im));
+		assert(n == sizeof(im));
+		uv_timer_stop(&trying);
+
+		printf("Server Info: pid %d (%d)\n"
+					 "Lines %lu Words %lu Characters %lu\n",
+					 im.pid, net_pid(sock),
+					 im.lines, im.words, im.characters);
+		if(im.next_commit) {
+			printf(
+				"Next commit: %lu (in %ld)\n",
+				im.next_commit, im.next_commit - time(NULL));
+		} else {
+			puts("No commit scheduled");
+		}
+
+		bufferevent_free(conn);
+		return;
+	}
+	// all other commands just send a 1 byte pong
+	if(left == 0) return;
+	if(left != 1) {
+		kill_remote(conn);
+		return;
+	}
+	char res;
+	int n = evbuffer_remove(input, &res, 1);
+	assert(n == 1);
+	switch(res) {
+	case 0:
+		// success
+		bufferevent_free(conn);
+		break;
+	default:
+		printf("Got weirdness %d\n",res);
+		abort();
+	};
+}
+
 void retry(uv_timer_t* timer) {
-	kill_remote((uv_stream_t*)&conn, 0);
+
 	csucks();
 }
 
@@ -259,6 +260,7 @@ void spawn_server(void) {
 
 static
 void try_connect() {
+	kill_remote(conn);
 	reconnect(net_connect());
 }
 
@@ -273,11 +275,10 @@ void reconnect(int sock) {
 		bufferevent_free(conn);
 	}
 	puts("Starting client");
-	conn = bufferevent_socket_new(base, sock, 0);
-	bufferevent_setcb(conn, get_reply, NULL, on_event, NULL);
+	conn = bufferevent_socket_new(base, sock, BEV_OPT_CLOSE_ON_FREE);
 	
 	if(conn) {
-		on_connect();
+		bufferevent_setcb(conn, get_reply, NULL, on_event, NULL);
 	} else {
 		perror("um");
 		close(sock);
