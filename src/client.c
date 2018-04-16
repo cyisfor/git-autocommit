@@ -98,10 +98,12 @@ static const struct timeval trying_timeout = {
 static
 int tries = 0;
 
+bool reconnecting = true;
+
 static
 void kill_remote(struct bufferevent* conn) {
 	printf("Killing remote... %d\n", net_pid(sock));
-	reconnect = false;
+	reconnecting = false;
 	kill(net_pid(sock),SIGTERM);
 	bufferevent_free(conn);
 }
@@ -115,7 +117,7 @@ void on_events(struct bufferevent *conn, short events, void *ptr) {
 		kill_remote(conn);
 	} else if(events & (BEV_EVENT_ERROR|BEV_EVENT_EOF)) {
 		puts("closing...");
-		if(reconnect) {
+		if(reconnecting) {
 			evtimer_add(trying, &trying_timeout);
 		} else {
 			event_base_loopexit(base, NULL);
