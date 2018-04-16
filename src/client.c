@@ -5,7 +5,8 @@
 #include "net.h"
 #include "check.h"
 
-#include <event2/event.h> // 
+#include <event2/bufferevent.h>
+#include <event2/buffer.h>
 
 
 #include <sys/socket.h> //
@@ -182,6 +183,11 @@ void get_reply(struct bufferevent *conn, void *ctx) {
 
 jmp_buf start_watcher;
 
+static
+void try_connect(void);
+static
+void reconnect(int sock) {
+
 void spawn_server(void) {
 	if(++tries > 3) {
 		if(debugging_fork) {
@@ -261,7 +267,7 @@ void spawn_server(void) {
 }
 
 static
-void try_connect() {
+void try_connect(void) {
 	return reconnect(net_connect());
 }
 
