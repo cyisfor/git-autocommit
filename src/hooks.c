@@ -8,6 +8,8 @@
 
 #include <sys/mman.h> // mmap
 
+#include <semaphore.h>
+
 #include <dlfcn.h> // dlopen, dlsym
 #include <unistd.h> // fork, exec*
 #include <stdarg.h> // va_*
@@ -181,7 +183,7 @@ void hook_run(const char* name, const size_t nlen, struct continuation after) {
 		}
 		int pid = checkpid_fork();
 		if(pid == 0) {
-			if(after) {
+			if(after.func) {
 				while(0 != sem_wait(ready)) {
 					puts("ohpleaseohpleasedon'tdie");
 					sleep(1);

@@ -20,14 +20,22 @@ struct after {
 
 struct after* afters = NULL;
 
-static void alloc_cb(uv_handle_t* handle, size_t size, uv_buf_t* ret) {
-	ret->len = (((size / sizeof(struct signalfd_siginfo))+1)*sizeof(struct signalfd_siginfo));
-	ret->base = realloc(ret->base,ret->len);
-}
-
-static void get_reply(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
-	ensure_ge(nread,0);
-	/* ignore the data read. ssi_status only gets the first process, not all of them */
+static
+void read_from_signalfd(evutil_socket_t sfd, short events, void * arg) {
+	/* ignore the data read.
+		 ssi_status only gets the first process, not all of them */
+	static char buf[0x100];
+	for(;;) {
+		ssize_t amt = read(sfd, buf, 0x100);
+		if(amt == 0) break;
+		if(amt < 0) {
+			if(errno != EAGAIN) {
+				perror("read signalfd");
+				abort();
+			}
+			break;
+		}
+	}
 	int pid;
 	int status;
 	void erra(char* fmt, ...) {
@@ -110,6 +118,7 @@ void checkpid_init(void) {
 	ensure_ge(s,0);
 	ensure0(uv_pipe_init(uv_default_loop(), &sfd, 0));
 	ensure0(uv_pipe_open(&sfd, s));
+	struct bufferevent* b = 
 	uv_read_start((uv_stream_t*)&sfd, alloc_cb, get_reply);
 }
 
