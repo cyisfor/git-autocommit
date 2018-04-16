@@ -4,9 +4,9 @@
 #include "net.h"
 #include "check.h"
 
-#include <uv.h>
+#include <libevent.h>
 
-#include <sys/socket.h> // 
+#include <sys/socket.h> //
 #include <sys/un.h> //
 #include <sys/resource.h> // setrlimit
 
@@ -17,13 +17,13 @@
 #include <assert.h>
 #include <string.h> // strlen
 #include <unistd.h> // getuid, close, dup2, fork
-#include <stdbool.h> 
+#include <stdbool.h>
 #include <sys/wait.h> // waitpid
 #include <stdarg.h> // va_*
 #include <fcntl.h> // open* O_PATH
 #include <pwd.h> // getpw*
 #include <sys/stat.h> // mkdir
-#include <error.h> // 
+#include <error.h> //
 #include <sys/prctl.h>
 #include <stdio.h>
 
@@ -118,7 +118,7 @@ void get_reply(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
 			return;
 		}
 		struct info_message* im = (struct info_message*)buf->base;
-			
+
 		printf("Server Info: pid %d (%d)\n"
 					 "Lines %lu Words %lu Characters %lu\n",
 					 im->pid, net_pid(sock),
@@ -130,7 +130,7 @@ void get_reply(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
 		} else {
 			puts("No commit scheduled");
 		}
-			
+
 		uv_read_stop(stream);
 	} else {
 		if(nread == 0) return;
@@ -152,13 +152,14 @@ void get_reply(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
 }
 
 
-uv_pipe_t conn;
-uv_write_t writing;
+struct event_base* base = NULL;
+struct bufferevent* conn = NULL;
+struct event* trying = NULL;
 
 void retry(uv_timer_t* timer) {
 	kill_remote((uv_stream_t*)&conn, 0);
 	csucks();
-} 
+}
 
 void await_reply(uv_write_t* req, int status) {
 	uv_read_start((uv_stream_t*)&conn, alloc_cb, get_reply);
@@ -175,93 +176,113 @@ void on_connect(void) {
 
 
 
-jmp_buf start_watcher;	
+jmp_buf start_watcher;
+
+void spawn_server(void) {
+	if(++tries > 3) {
+		if(debugging_fork) {
+			sleep(3);
+			return try_connect();
+		} else {
+			printf("Couldn't spawn server %d\n",tries);
+			abort();
+		}
+	}
+
+	if(op == QUIT || op == FORCE) exit(0);
+	if(op == INFO && NULL == getenv("start")) {
+		printf("Server not running.\n");
+		exit(1);
+	}
+	// try to bind
+	sock = net_bind();
+	if(sock <= 0) return; // already bound, server is go
+
+	printf("Got bound socket %d. Starting server...\n",sock);
+
+	/*
+		1) fork(), child is the server. parent...
+		2) fork(), child is the client. parent is the watcher.
+		*/
 	
-void try_connect() {
-	// uv_pipe_connect fails on abstract sockets
-	// https://github.com/joyent/libuv/issues/1486
-	sock = net_connect();
-	if(sock == -1) {
-		if(++tries > 3) {
-			if(debugging_fork) {
-				sleep(3);
-				return try_connect();
-			} else {
-				printf("Couldn't spawn server %d\n",tries);
-				abort();
-			}
-		}
-
-		if(op == QUIT || op == FORCE) exit(0);
-		if(op == INFO && NULL == getenv("start")) {
-			printf("Server not running.\n");
-			exit(1);
-		}
-			
-		// try to bind
-		sock = net_bind();
-		if(sock <= 0) return; // already bound, hopefully
-		printf("Got socket %d\n",sock);
-
-		// we got it. start the server
-		// do not unblock signals, since we're also duping our signalfd.
-		int server_pid = fork();
-		if(server_pid == 0) {
-			setsid();
+	// do not unblock signals, since we're also duping our signalfd.
+	int server_pid = fork();
+	if(server_pid == 0) {
+		setsid();
 
 /*				dup2(sock,3);
 					sock = 3; */
 
-			// emacs tries to trap you by opening a secret unused pipe
-			int i;
-			for(i=sock+1;i < sock+10; ++i) {
-				close(i);
-			}
+		// emacs tries to trap you by opening a secret unused pipe
+		int i;
+		for(i=sock+1;i < sock+10; ++i) {
+			close(i);
+		}
 
-			setuplog();
+		setuplog();
 
-			int watcher = fork();
-			if(watcher == 0) {
-				if(debugging_fork) {
-					int targetpid = getpid();
-					int gdb = fork();
-					if(gdb == 0) {
-						char buf[100];
-						snprintf(buf,100,"%d",targetpid);
-						execlp("xfce4-terminal","xfce4-terminal","-x","gdb","-p",buf,NULL);
-						abort();
-					}
-					waitpid(gdb,NULL,0);
-					sleep(3);
+		int watcher = fork();
+		if(watcher == 0) {
+			if(debugging_fork) {
+				int targetpid = getpid();
+				int gdb = fork();
+				if(gdb == 0) {
+					char buf[100];
+					snprintf(buf,100,"%d",targetpid);
+					execlp("xfce4-terminal","xfce4-terminal","-x","gdb","-p",buf,NULL);
+					abort();
 				}
-				uv_timer_stop(&trying);
-				// call check_init directly, instead of wasting time with execve
-				check_init(sock);
-
-				// already started out uv_run in the parent process
-				// now we're the server, so just go back to the loop
-				// forget about longjmp that's just for the watcher process
-				return;
+				waitpid(gdb,NULL,0);
+				sleep(3);
 			}
-			close(sock);
-			longjmp(start_watcher, watcher);
-			abort();
-		}
-		assert(server_pid > 0);
+			evtimer_del(trying);
+			// call check_init directly, instead of wasting time with execve
+			check_init(sock);
 
-		printf("starting server %d\n",server_pid);
-		net_forkhack(server_pid);
-		close(sock); // XXX: could we finagle this socket into a connected one without closing it?
-		usleep(100000); // XXX: mysterious race condition... activity on the client's sockets created AFTER the server is forked, are reported to the server process?
-		try_connect(); // we should be able to connect right away since listen() already called
-	} else {
-		int res = uv_pipe_open((uv_pipe_t*)&conn, sock);
-		if(res == 0) {
-			on_connect();
-		} else {
-			printf("um %s\n",uv_strerror(res));
-			close(sock);
+			// already started out uv_run in the parent process
+			// now we're the server, so just go back to the loop
+			// forget about longjmp that's just for the watcher process
+			return;
 		}
+		close(sock);
+		longjmp(start_watcher, watcher);
+		abort();
+	}
+	assert(server_pid > 0);
+
+	printf("starting server %d\n",server_pid);
+	net_forkhack(server_pid);
+	//usleep(100000); // XXX: mysterious race condition... activity on the client's sockets created AFTER the server is forked, are reported to the server process?
+	return reconnect(sock); // we should be able to connect right away since listen() already called
+}
+
+
+static
+void try_connect() {
+	reconnect(net_connect());
+}
+
+static
+void reconnect(int sock) {
+	if(sock == -1) {
+		return spawn_server();
+	}
+
+	if(conn) {
+		puts("Stopping bad client");
+		bufferevent_free(conn);
+	}
+	puts("Starting client");
+	conn = bufferevent_socket_new(base, sock, 0);
+	bufferevent_setcb(conn, get_reply, NULL, on_event, NULL);
+	
+	if(conn) {
+		on_connect();
+	} else {
+		perror("um");
+		close(sock);
+		// try again later, I guess...
+		evtimer_add(base, trying);
 	}
 }
 
@@ -274,7 +295,7 @@ int main(int argc, char *argv[])
 		2*1024*1024*1024L
 	};
 	setrlimit(RLIMIT_AS, &rlim);
-	
+
 	if(0 != (server_pid = setjmp(start_watcher))) {
 		// keep our retarded watcher nice and retardedly simple,
 		// with no uv_loop hanging out there.
@@ -316,7 +337,7 @@ int main(int argc, char *argv[])
 	} else {
 		op = ADD;
 	}
-		
+
 	char* path;
 	char bigpath[PATH_MAX];
 	size_t plen;
@@ -344,14 +365,15 @@ int main(int argc, char *argv[])
 		// printf("repo relative path %s\n",path);
 		repo_add(path);
 	}
-	
+
 	net_set_addr();
 
 	/* the strategy is... continue trying to connect to addr
 		 if ECONNREFUSED, try binding
 		 if bound, listen, fork and hand over the socket, then go back to connecting
 	*/
-	
+
+	evtimer_add(evtimer_new(event_base, &try_connect
 	writing.data = &conn;
 	uv_pipe_init(uv_default_loop(), &conn, 1);
 
