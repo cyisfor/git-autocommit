@@ -1,3 +1,4 @@
+#include "ignore.h"
 #include "eventbase.h"
 #include "ops.h"
 #include "check.h"
@@ -372,7 +373,7 @@ static void queue_commit(void) {
 	repo_check(git_diff_foreach(diff, on_file, on_binary, NULL, on_line, &ol));
 	git_diff_free(diff);
 	{ char buf[0x200];
-		write(1, buf, snprintf(buf,0x100,"checking lwc %d %d %d\n",lines,words,characters));
+		ignore(write(1, buf, snprintf(buf,0x100,"checking lwc %d %d %d\n",lines,words,characters)));
 	}
 	maybe_commit(lines, words, characters);
 }
@@ -394,7 +395,7 @@ static void commit_now(struct bufferevent* conn) {
 	
 	if(0 == changes) {
 		#define LITLEN(s) s, (sizeof(s)-1)
-		write(1,LITLEN("no empty commits please.\n"));
+		ignore(write(1,LITLEN("no empty commits please.\n")));
 		// no empty commits, please
 		return;
 	}
@@ -420,8 +421,8 @@ static void post_pre_commit(struct bufferevent* conn) {
 	// back when the timer was started?
 	ssize_t amt = snprintf(message,0x1000,"auto %u %u %u",
 												 ci.lines, ci.words, ci.characters);
-	write(1, message,amt); // stdout fileno in a weird place to stop unexpected output
-	write(1, " ",1);
+	ignore(write(1, message,amt)); // stdout fileno in a weird place to stop unexpected output
+	ignore(write(1, " ",1));
 
 	git_oid treeoid;
 	repo_check(git_index_write_tree(&treeoid, idx));
@@ -450,8 +451,8 @@ static void post_pre_commit(struct bufferevent* conn) {
 	
 	char oid_hex[GIT_OID_HEXSZ+1] = { 0 };
 	git_oid_fmt(oid_hex, &new_commit);
-	write(1,oid_hex,GIT_OID_HEXSZ);
-	write(1,"\n",1);
+	ignore(write(1,oid_hex,GIT_OID_HEXSZ));
+	ignore(write(1,"\n",1));
 
 	git_commit_free(head);
 	git_tree_free(tree);
@@ -523,7 +524,8 @@ static void maybe_commit(u32 lines, u32 words, u32 characters) {
 	if(ci.next_commit == 0 || now > ci.next_commit || now + d < ci.next_commit) {
 		// keep pushing the timer back, so we commit sooner if more changes
 		char buf[0x200];
-		write(1,buf,snprintf(buf,0x200,"waiting %.2f\n",d)); // weird stdout fd
+		ignore(write(1,buf,snprintf(buf,0x200,"waiting %.2f\n",d)));
+// weird stdout fd
 		
 		evtimer_del(ci.later);
 		ci.next_commit = now + d;
@@ -537,6 +539,23 @@ static void maybe_commit(u32 lines, u32 words, u32 characters) {
 	}
 }
 
+static
+void listen_error(struct evconnlistener * listener, void * ctx) {
+	struct event_base *base = evconnlistener_get_base(listener);
+	int err = EVUTIL_SOCKET_ERROR();
+	{ char buf[0x1000];
+		ignore(write(1,buf,snprintf(
+									 buf, 0x1000,
+									 "accept error %d (%s) halting in 5s\n",
+									 err,
+									 evutil_socket_error_to_string(err))));
+	}
+	evconnlistener_free(listener);
+	sleep(5);
+	event_base_loopexit(base, NULL);
+	ignore(write(1,LITLEN("Halting.\n")));
+}
+
 void check_init(int sock) {
 	struct bufferevent* conn = bufferevent_socket_new(
 		base, sock, BEV_OPT_CLOSE_ON_FREE);
@@ -545,11 +564,14 @@ void check_init(int sock) {
 	activity_init();
 	hooks_init();
 
-	evconnlistener_new(
+	struct evconnlistener* listener = evconnlistener_new(
 		base,
 		on_accept, NULL,
 		LEV_OPT_CLOSE_ON_EXEC |
-		LEV_OPT_CLOSE_ON_FREE,
+		LEV_OPT_CLOSE_ON_FREE |
+		LEV_OPT_REUSEABLE |
+		LEV_OPT_DEFERRED_ACCEPT,
 		10,
 		sock);
+	evconnlistener_set_error_cb(listener, listen_error);
 }
