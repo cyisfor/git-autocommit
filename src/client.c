@@ -328,8 +328,7 @@ int main(int argc, char *argv[])
 	setrlimit(RLIMIT_AS, &rlim);
 
 	alarm(3*60); // if the client lasts longer than 3 minutes,
-	// libevent's screwed up again and doesn't allow debugging
-	// so just hard kill it.
+	// libevent's screwed up again so just hard kill it.
 
 	if(0 != (server_pid = setjmp(start_watcher))) {
 		// keep our retarded watcher nice and retardedly simple,
