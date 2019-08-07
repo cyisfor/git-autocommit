@@ -91,10 +91,10 @@ size_t repo_relative(char** path, size_t plen) {
 
 void repo_check(git_error_code e) {
 	if(e == 0) return;
-	const git_error* err = giterr_last();
+	const git_error* err = git_error_last();
 	if(err != NULL) {
 		fprintf(stderr,"GIT ERROR: %s\n",err->message);
-		giterr_clear();
+		git_error_clear();
 	}
 
 	exit(e);

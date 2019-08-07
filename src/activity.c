@@ -10,7 +10,7 @@ static void too_idle() {
 
 static
 const struct timeval activity_delay = {
-	.tv_sec = 60 * 60
+	.tv_sec = 60 * 5
 };
 
 void activity_poke(void) {
