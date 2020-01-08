@@ -184,7 +184,7 @@ void hook_run(struct event_base* eventbase, const char* name, const size_t nlen,
 	}
 	if(i == nhooks) {
 		// no hook
-		continuation_run(eventbase, after);
+		continuation_run(after);
 		return;
 	}
 	struct hook* hook = hooks+i;

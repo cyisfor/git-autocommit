@@ -67,7 +67,7 @@ void just_exit() {
 
 #pragma GCC diagnostic ignored "-Wtrampolines"
 
-static void commit_now(struct event_base* eventbase, struct bufferevent* conn);
+static void commit_now(struct commit_later_data* data);
 
 bool quitting = false;
 
@@ -400,7 +400,7 @@ static void queue_commit(void) {
 	maybe_commit(lines, words, characters);
 }
 
-static void post_pre_commit(struct bufferevent* conn);
+static void post_pre_commit(struct commit_later_data* data);
 
 static
 int check(const char *path, unsigned int status_flags, void *payload) {
@@ -409,7 +409,7 @@ int check(const char *path, unsigned int status_flags, void *payload) {
 	return 0;
 }
 
-static void commit_now(struct event_base* eventbase, struct bufferevent* conn) {
+static void commit_now(struct commit_later_data* data) {
 	int changes = 0;
 	git_status_options opt = GIT_STATUS_OPTIONS_INIT;
 	opt.show = GIT_STATUS_SHOW_INDEX_ONLY;
@@ -423,14 +423,16 @@ static void commit_now(struct event_base* eventbase, struct bufferevent* conn) {
 	}
 
 	struct continuation after = {
-		(void*)post_pre_commit, conn
+		.eventbase = eventbase,
+		.func = post_pre_commit,
+		.arg = data
 	};
-	HOOK_RUN(eventbase, "pre-commit",after);
+	HOOK_RUN(data->eventbase, "pre-commit",after);
 	// now-ish
 }
 
-static void post_pre_commit(struct bufferevent* conn) {
-	bufferevent_free(conn);
+static void post_pre_commit(struct commit_later_data* data) {
+	bufferevent_free(data->conn);
 
 	git_index* idx = NULL;
 	git_signature *me = NULL;
@@ -515,7 +517,8 @@ static void post_pre_commit(struct bufferevent* conn) {
 	git_signature_free(me);
 
 	struct continuation nothing = {};
-	HOOK_RUN(eventbase, "post-commit",nothing);
+	HOOK_RUN(data->eventbase, "post-commit",nothing);
+	free(data);
 }
 
 struct commit_later_data {

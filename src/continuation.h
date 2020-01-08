@@ -5,10 +5,11 @@
 
 
 struct continuation {
+	struct event_base* eventbase;
 	void (*func)(void*);
 	void* arg;
 };
 
-void continuation_run(struct event_base*, const struct continuation c);
+void continuation_run(const struct continuation c);
 
 #endif /* CONTINUATION_H */
