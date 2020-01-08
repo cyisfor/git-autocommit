@@ -238,7 +238,7 @@ void hook_run(struct event_base* eventbase, const char* name, const size_t nlen,
 	}
 }
 
-void hooks_init(void) {
+void hooks_init(struct event_base* eventbase) {
 	assert0(chdir(git_repository_path(repo)));
 	mkdir("hooks",0755);
 	assert0(chdir("hooks"));
@@ -248,5 +248,5 @@ void hooks_init(void) {
 	load(LITLEN("pre-commit"));
 	load(LITLEN("post-commit"));
 	assert0(chdir(git_repository_workdir(repo)));
-	checkpid_init();
+	checkpid_init(eventbase);
 }

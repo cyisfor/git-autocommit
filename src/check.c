@@ -67,6 +67,11 @@ void just_exit() {
 
 #pragma GCC diagnostic ignored "-Wtrampolines"
 
+struct commit_later_data {
+	struct bufferevent* conn;
+	struct event_base* eventbase;
+};
+
 static void commit_now(struct commit_later_data* data);
 
 bool quitting = false;
@@ -103,11 +108,10 @@ static void on_read(struct bufferevent* conn, void* udata) {
 			bufferevent_write(conn, &op, 1);
 			return;
 		case FORCE: {
-			struct commit_later_data data = {
-				.conn = conn,
-				.base = eventbase
-			};
-			commit_now(&data);
+			struct commit_later_data* data = malloc(sizeof(struct commit_later_data));
+			data->conn = conn;
+			data->eventbase = eventbase;
+			commit_now(data);
 			bufferevent_write(conn, &op, 1);
 			break;
 		case INFO: {
@@ -521,11 +525,6 @@ static void post_pre_commit(struct commit_later_data* data) {
 	free(data);
 }
 
-struct commit_later_data {
-	struct bufferevent* conn;
-	struct event_base* eventbase;
-};
-
 static void commit_later(evutil_socket_t nope, short events, void *arg) {
 	commit_now(arg);
 }
@@ -642,7 +641,7 @@ void check_init(struct event_base* eventbase, int sock) {
 	ci.later = evtimer_new(eventbase, (void*)commit_later, data);
 
 	activity_init();
-	hooks_init();
+	hooks_init(eventbase);
 
 	struct evconnlistener* listener = evconnlistener_new(
 		eventbase,
