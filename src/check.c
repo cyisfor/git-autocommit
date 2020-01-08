@@ -142,7 +142,7 @@ on_accept(struct evconnlistener *listener,
 	struct bufferevent* conn = bufferevent_socket_new(
 		eventbase, fd,
 		BEV_OPT_CLOSE_ON_FREE);
-	bufferevent_setcb(conn, on_read, eventbase, on_events, eventbase);
+	bufferevent_setcb(conn, on_read, NULL, on_events, eventbase);
 	bufferevent_enable(conn, EV_READ);
 	activity_poke();
 }
@@ -405,7 +405,7 @@ static void queue_commit(void) {
 	maybe_commit(lines, words, characters);
 }
 
-static void post_pre_commit(struct commit_later_data* data);
+static void post_pre_commit(void* udata);
 
 static
 int check(const char *path, unsigned int status_flags, void *payload) {
@@ -429,14 +429,15 @@ static void commit_now(struct commit_later_data* data) {
 
 	struct continuation after = {
 		.eventbase = data->eventbase,
-		.func = (void*)post_pre_commit,
+		.func = post_pre_commit,
 		.arg = data
 	};
 	HOOK_RUN(data->eventbase, "pre-commit",after);
 	// now-ish
 }
 
-static void post_pre_commit(struct commit_later_data* data) {
+static void post_pre_commit(void* udata) {
+	struct commit_later_data* data = (struct commit_later_data*) udata;
 	bufferevent_free(data->conn);
 
 	git_index* idx = NULL;
@@ -472,13 +473,13 @@ static void post_pre_commit(struct commit_later_data* data) {
 							 tree, /* root tree */
 							 1,                           /* parent count */
 							 (const git_commit**) &head)); /* parents */
-	assert(strlen(commit_content.ptr) == commit_content.asize);
+	assert(strlen(commit_content.ptr) == commit_content.size);
 	/* now sign the contents with gpgme */
 	gpgme_data_t gpgcommit;
 	gpg_check(gpgme_data_new_from_mem(
 		&gpgcommit, 
 		commit_content.ptr,
-		commit_content.asize,
+		commit_content.size,
 		0));
 	gpgme_data_t gpgsig;
 	gpg_check(gpgme_data_new(&gpgsig));
@@ -497,8 +498,9 @@ static void post_pre_commit(struct commit_later_data* data) {
 	
 	size_t gpgsiglen = 0;
 	char* gpgsigdata = gpgme_data_release_and_get_mem(gpgsig, &gpgsiglen);
-	assert(strlen(gpgsigdata) == gpgsiglen);
-
+	/* XXX: this won't buffer overrun, will it? */
+	gpgsigdata[gpgsiglen] = 0;
+	
 	repo_check(git_commit_create_with_signature(
 				   &new_commit,
 				   repo,
@@ -641,7 +643,7 @@ void check_init(struct event_base* eventbase, int sock) {
 	data->eventbase = eventbase;
 	ci.later = evtimer_new(eventbase, (void*)commit_later, data);
 
-	activity_init();
+	activity_init(eventbase);
 	hooks_init(eventbase);
 
 	struct evconnlistener* listener = evconnlistener_new(

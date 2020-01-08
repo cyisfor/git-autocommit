@@ -3,6 +3,7 @@
 #include "repo.h"
 #include "net.h"
 #include "check.h"
+#include "eventbase.h"
 
 #include <event2/bufferevent.h>
 #include <event2/buffer.h>
@@ -310,6 +311,7 @@ void reconnect(struct event_base* eventbase, int sock) {
 		bufferevent_setwatermark(conn, EV_WRITE, 1, 1);
 		bufferevent_write(conn, &op, 1);
 		bufferevent_enable(conn, EV_WRITE);
+		reconnecting = false;
 	} else {
 		perror("um");
 		int pid = net_pid(sock);
