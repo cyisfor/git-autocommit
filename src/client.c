@@ -1,5 +1,4 @@
 #define _GNU_SOURCE
-#include "eventbase.h"
 #include "ops.h"
 #include "repo.h"
 #include "net.h"
@@ -184,15 +183,16 @@ void get_reply(struct bufferevent *conn, void *ctx) {
 jmp_buf start_watcher;
 
 static
-void try_connect(void);
+void try_connect(evutil_socket_t, short, void *);
+
 static
 void reconnect(int sock);
 
-void spawn_server(void) {
+void spawn_server(struct event_base* eventbase) {
 	if(++tries > 3) {
 		if(debugging_fork) {
 			sleep(3);
-			return try_connect();
+			return try_connect(0,0,eventbase);
 		} else {
 			printf("Couldn't spawn server %d\n",tries);
 			abort();
@@ -218,6 +218,7 @@ void spawn_server(void) {
 	// do not unblock signals, since we're also duping our signalfd.
 	int server_pid = fork();
 	if(server_pid == 0) {
+		event_reinit(base);
 		setsid();
 
 /*				dup2(sock,3);
@@ -245,10 +246,10 @@ void spawn_server(void) {
 				waitpid(gdb,NULL,0);
 				sleep(3);
 			}
-			event_reinit(base);
+			event_reinit(eventbase);
 			evtimer_del(trying);
 			// call check_init directly, instead of wasting time with execve
-			check_init(sock);
+			check_init(eventbase, sock);
 			puts("server intialized.");
 
 			reconnecting = false;
@@ -267,12 +268,13 @@ void spawn_server(void) {
 	printf("started server %d. We client now.\n",server_pid);
 	net_forkhack(server_pid);
 	//usleep(100000); // XXX: mysterious race condition... activity on the client's sockets created AFTER the server is forked, are reported to the server process?
-	return reconnect(sock); // we should be able to connect right away since listen() already called
+	return reconnect(eventbase, sock); // we should be able to connect right away since listen() already called
 }
 
 static
-void try_connect(void) {
-	return reconnect(net_connect());
+void try_connect(evutil_socket_t, short, void * udata) {
+	struct event_base* eventbase = (struct event_base*)udata;
+	return reconnect(eventbase, net_connect());
 }
 
 static
@@ -284,9 +286,9 @@ void wrote_response(struct bufferevent* conn, void* arg) {
 }
 
 static
-void reconnect(int sock) {
+void reconnect(struct event_base* eventbase, int sock) {
 	if(sock == -1) {
-		return spawn_server();
+		return spawn_server(eventbase);
 	}
 
 	if(conn) {
@@ -294,7 +296,7 @@ void reconnect(int sock) {
 		bufferevent_free(conn);
 	}
 	puts("Starting client");
-	conn = bufferevent_socket_new(base, sock, BEV_OPT_CLOSE_ON_FREE);
+	conn = bufferevent_socket_new(eventbase, sock, BEV_OPT_CLOSE_ON_FREE);
 	
 	if(conn) {
 		const struct timeval timeout = {
@@ -354,7 +356,7 @@ int main(int argc, char *argv[])
 	// now everything written to "message" goes to stdout (emacs)
 	// while stdout/err goes to a log
 
-	eventbase_init();
+	struct event_base* eventbase = eventbase_init();
 
 	void bye(const char* fmt, ...) {
 		va_list args;
@@ -417,12 +419,12 @@ int main(int argc, char *argv[])
 		 if bound, listen, fork and hand over the socket, then go back to connecting
 	*/
 
-	trying = evtimer_new(base, (void*)try_connect, NULL);
+	trying = evtimer_new(eventbase, (void*)try_connect, eventbase);
 	const struct timeval now = {};
 	evtimer_add(trying, &now);
 
 	debugging_fork = getenv("debugfork") != NULL;
 
-	event_base_dispatch(base);
+	event_base_dispatch(eventbase);
 	return 0;
 }

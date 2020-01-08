@@ -6,6 +6,6 @@ struct continuation {
 	void* arg;
 };
 
-void continuation_run(struct continuation c);
+void continuation_run(const struct continuation c);
 
 #endif /* CONTINUATION_H */

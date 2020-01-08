@@ -67,12 +67,13 @@ void just_exit() {
 
 #pragma GCC diagnostic ignored "-Wtrampolines"
 
-static void commit_now(struct bufferevent* conn);
+static void commit_now(struct event_base* eventbase, struct bufferevent* conn);
 
 bool quitting = false;
 
 static void
-on_events(struct bufferevent *conn, short events, void *ctx) {
+on_events(struct bufferevent *conn, short events, void *udata) {
+	struct event_base* eventbase = (struct event_base*)udata;
 	if(events & BEV_EVENT_ERROR) {
 		perror("connection error");
 	} else if(events & BEV_EVENT_EOF) {
@@ -82,11 +83,12 @@ on_events(struct bufferevent *conn, short events, void *ctx) {
 	} 
 	bufferevent_free(conn);
 	if(quitting) {
-		event_base_loopexit(base, NULL);
+		event_base_loopexit(eventbase, NULL);
 	}
 }
 
 static void on_read(struct bufferevent* conn, void* udata) {
+	struct event_base* eventbase = (struct event_base*)udata;
 	struct evbuffer* input = bufferevent_get_input(conn);
 	size_t avail = evbuffer_get_length(input);
 	bufferevent_enable(conn, EV_WRITE);
@@ -101,7 +103,7 @@ static void on_read(struct bufferevent* conn, void* udata) {
 			bufferevent_write(conn, &op, 1);
 			return;
 		case FORCE:
-			commit_now(conn);
+			commit_now(eventbase, conn);
 			bufferevent_write(conn, &op, 1);
 			break;
 		case INFO: {
@@ -126,10 +128,12 @@ static void on_read(struct bufferevent* conn, void* udata) {
 static void
 on_accept(struct evconnlistener *listener,
 					evutil_socket_t fd, struct sockaddr *address, int socklen,
-					void *ctx) {
-	struct bufferevent* conn = bufferevent_socket_new(base, fd,
-																										BEV_OPT_CLOSE_ON_FREE);
-	bufferevent_setcb(conn, on_read, NULL, on_events, NULL);
+					void *udata) {
+	struct event_base* eventbase = (struct event_base*)udata;
+	struct bufferevent* conn = bufferevent_socket_new(
+		eventbase, fd,
+		BEV_OPT_CLOSE_ON_FREE);
+	bufferevent_setcb(conn, on_read, eventbase, on_events, eventbase);
 	bufferevent_enable(conn, EV_READ);
 	activity_poke();
 }
@@ -510,8 +514,14 @@ static void post_pre_commit(struct bufferevent* conn) {
 	HOOK_RUN("post-commit",nothing);
 }
 
+struct commit_later_data {
+	struct bufferevent* conn;
+	struct event_base* eventbase;
+};
+
 static void commit_later(evutil_socket_t nope, short events, void *arg) {
-	commit_now((struct bufferevent*)arg);
+	struct commit_later_data* data = (struct commit_later_data*)arg;
+	commit_now(data->eventbase, data->conn);
 }
 
 static void maybe_commit(u32 lines, u32 words, u32 characters) {
@@ -589,7 +599,7 @@ static void maybe_commit(u32 lines, u32 words, u32 characters) {
 
 static
 void listen_error(struct evconnlistener * listener, void * ctx) {
-	struct event_base *base = evconnlistener_get_base(listener);
+	struct event_base *eventbase = evconnlistener_get_base(listener);
 	int err = EVUTIL_SOCKET_ERROR();
 	{ char buf[0x1000];
 		ignore(write(1,buf,snprintf(
@@ -600,11 +610,11 @@ void listen_error(struct evconnlistener * listener, void * ctx) {
 	}
 	evconnlistener_free(listener);
 	sleep(5);
-	event_base_loopexit(base, NULL);
+	event_base_loopexit(eventbase, NULL);
 	ignore(write(1,LITLEN("Halting.\n")));
 }
 
-void check_init(int sock) {
+void check_init(struct event_base* eventbase, int sock) {
 
 	gpgme_check_version(NULL);
 	gpg_check(gpgme_new(&gpgme_ctx));
@@ -619,16 +629,18 @@ void check_init(int sock) {
 	gpg_check(gpgme_set_locale(gpgme_ctx, ???, "UTF-8"));
 #endif
 
-	struct bufferevent* conn = bufferevent_socket_new(
-		base, sock, BEV_OPT_CLOSE_ON_FREE);
-	ci.later = evtimer_new(base, (void*)commit_later, conn);
+	struct commit_later_data* data  = malloc(sizeof(struct commit_later_data));
+	data->conn = bufferevent_socket_new(
+		eventbase, sock, BEV_OPT_CLOSE_ON_FREE);
+	data->eventbase = eventbase;
+	ci.later = evtimer_new(eventbase, (void*)commit_later, data);
 
 	activity_init();
 	hooks_init();
 
 	struct evconnlistener* listener = evconnlistener_new(
-		base,
-		on_accept, NULL,
+		eventbase,
+		on_accept, eventbase,
 		LEV_OPT_CLOSE_ON_EXEC |
 		LEV_OPT_CLOSE_ON_FREE |
 		LEV_OPT_REUSEABLE |

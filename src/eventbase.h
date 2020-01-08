@@ -1,4 +1,3 @@
 #include <event2/event.h>
-extern struct event_base* base;
 
-void eventbase_init(void);
+struct event_base* eventbase_init(void);

@@ -213,6 +213,7 @@ void hook_run(const char* name, const size_t nlen, struct continuation after) {
 				puts("semaphore waited!");
 				munmap(mem,sizeof(sem_t));
 			}
+			assert(base);
 			event_reinit(base);
 			char* args[] = { hook->u.path, NULL };
 			execv(hook->u.path,args);

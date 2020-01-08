@@ -30,10 +30,10 @@ int main(int argc, char *argv[])
 	net_set_addr();
 	int sock = net_bind();
 	if(sock == -1) exit(1);
-	eventbase_init();
-	check_init(sock);
+	struct event_base* eventbase = eventbase_init();
+	check_init(eventbase, sock);
 
-	event_base_dispatch(base);
+	event_base_dispatch(eventbase);
 
 	return 0;
 }
