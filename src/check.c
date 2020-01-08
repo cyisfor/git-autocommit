@@ -18,6 +18,9 @@
 #include <git2/commit.h>
 #include <git2/signature.h>
 #include <git2/status.h>
+#include <git2/buffer.h>
+
+#include <gpgme/gpgme.h>
 
 #include <assert.h>
 #include <stdlib.h> // malloc
@@ -30,6 +33,17 @@
 #include <ctype.h> // isspace
 #include <stdbool.h>
 #include <error.h>
+
+gpgme_ctx_t gpgme_ctx = NULL;
+
+static
+void gpg_check(int res) {
+	if(res == GPG_ERR_NO_ERROR) return;
+	fprintf(stderr, "GPG failed %s %s\n",
+			gpgme_strerror(res),
+			gpgme_strsource(res));
+	abort();
+}
 
 typedef uint32_t u32;
 
@@ -432,11 +446,10 @@ static void post_pre_commit(struct bufferevent* conn) {
 	git_oid new_commit;
 
 	git_commit* head = get_head();
-
-	repo_check(git_commit_create(
-							 &new_commit,
+	git_buf commit_content = {};
+	repo_check(git_commit_create_buffer(
+							 &commit_content,
 							 repo,
-							 "HEAD", /* name of ref to update */
 							 me, /* author */
 							 me, /* committer */
 							 "UTF-8", /* message encoding */
@@ -444,7 +457,42 @@ static void post_pre_commit(struct bufferevent* conn) {
 							 tree, /* root tree */
 							 1,                           /* parent count */
 							 (const git_commit**) &head)); /* parents */
+	assert(strlen(commit_content.ptr) == commit_content.asize);
+	/* now sign the contents with gpgme */
+	gpgme_data_t gpgcommit;
+	gpg_check(gpgme_data_new_from_mem(
+		&gpgcommit, 
+		commit_content.ptr,
+		commit_content.asize,
+		0));
+	gpgme_data_t gpgsig;
+	gpg_check(gpgme_data_new(&gpgsig));
 
+	const char* fpr = getenv("AUTOCOMMIT_KEY");
+	ensure_ne(NULL, fpr);
+	gpgme_key_t key;
+	gpg_check(gpgme_get_key(gpgme_ctx, fpr, &key, 1));
+	gpg_check(gpgme_signers_add(gpgme_ctx, key));
+	
+	gpg_check(gpgme_op_sign(gpgme_ctx, gpgcommit,
+							gpgsig, GPGME_SIG_MODE_DETACH));
+
+	gpgme_signers_clear(gpgme_ctx);
+	gpgme_data_release(gpgcommit);
+	
+	size_t gpgsiglen = 0;
+	char* gpgsigdata = gpgme_data_release_and_get_mem(gpgsig, &gpgsiglen);
+	assert(strlen(gpgsigdata) == gpgsiglen);
+
+	repo_check(git_commit_create_with_signature(
+				   &new_commit,
+				   repo,
+				   commit_content.ptr,
+				   gpgsigdata,
+				   "gpgsig"));
+
+	gpgme_free(gpgsigdata);
+	
 	git_index_write(idx);
 	git_index_free(idx);
 
@@ -557,6 +605,20 @@ void listen_error(struct evconnlistener * listener, void * ctx) {
 }
 
 void check_init(int sock) {
+
+	gpgme_check_version(NULL);
+	gpg_check(gpgme_new(&gpgme_ctx));
+	gpgme_set_armor(gpgme_ctx, 1);
+	gpg_check(gpgme_set_keylist_mode(
+				  gpgme_ctx,
+				  GPGME_KEYLIST_MODE_LOCAL));
+#if 0
+	gpg_check(gpgme_set_pinentry_mode(
+				  gpgme_ctx,
+				  GPGME_PINENTRY_MODE_ERROR));
+	gpg_check(gpgme_set_locale(gpgme_ctx, ???, "UTF-8"));
+#endif
+
 	struct bufferevent* conn = bufferevent_socket_new(
 		base, sock, BEV_OPT_CLOSE_ON_FREE);
 	ci.later = evtimer_new(base, (void*)commit_later, conn);
