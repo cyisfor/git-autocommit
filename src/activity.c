@@ -1,5 +1,4 @@
 #include "activity.h"
-#include "eventbase.h"
 
 #include <stdlib.h> // exit
 
@@ -18,7 +17,7 @@ void activity_poke(void) {
 	evtimer_add(activity, &activity_delay);
 }
 
-void activity_init(void) {
-	activity = evtimer_new(base, (void*)too_idle, NULL);
+void activity_init(struct event_base* eventbase) {
+	activity = evtimer_new(eventbase, (void*)too_idle, NULL);
 	evtimer_add(activity, &activity_delay);
 }

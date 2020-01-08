@@ -102,8 +102,12 @@ static void on_read(struct bufferevent* conn, void* udata) {
 			quitting = true;
 			bufferevent_write(conn, &op, 1);
 			return;
-		case FORCE:
-			commit_now(eventbase, conn);
+		case FORCE: {
+			struct commit_later_data data = {
+				.conn = conn,
+				.base = eventbase
+			};
+			commit_now(&data);
 			bufferevent_write(conn, &op, 1);
 			break;
 		case INFO: {
@@ -511,7 +515,7 @@ static void post_pre_commit(struct bufferevent* conn) {
 	git_signature_free(me);
 
 	struct continuation nothing = {};
-	HOOK_RUN("post-commit",nothing);
+	HOOK_RUN(eventbase, "post-commit",nothing);
 }
 
 struct commit_later_data {
@@ -520,8 +524,7 @@ struct commit_later_data {
 };
 
 static void commit_later(evutil_socket_t nope, short events, void *arg) {
-	struct commit_later_data* data = (struct commit_later_data*)arg;
-	commit_now(data->eventbase, data->conn);
+	commit_now(arg);
 }
 
 static void maybe_commit(u32 lines, u32 words, u32 characters) {
