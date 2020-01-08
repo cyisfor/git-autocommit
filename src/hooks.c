@@ -174,7 +174,7 @@ static void load(const char* name, size_t nlen) {
 	abort(); // nuever 
 }
 
-void hook_run(const char* name, const size_t nlen, struct continuation after) {
+void hook_run(struct event_base* eventbase, const char* name, const size_t nlen, struct continuation after) {
 	size_t i = 0;
 	for(;i<nhooks;++i) {
 		if(hooks[i].name.len == nlen &&
@@ -184,7 +184,7 @@ void hook_run(const char* name, const size_t nlen, struct continuation after) {
 	}
 	if(i == nhooks) {
 		// no hook
-		continuation_run(after);
+		continuation_run(eventbase, after);
 		return;
 	}
 	struct hook* hook = hooks+i;
@@ -213,8 +213,7 @@ void hook_run(const char* name, const size_t nlen, struct continuation after) {
 				puts("semaphore waited!");
 				munmap(mem,sizeof(sem_t));
 			}
-			assert(base);
-			event_reinit(base);
+			event_reinit(eventbase);
 			char* args[] = { hook->u.path, NULL };
 			execv(hook->u.path,args);
 			if(errno == ENOEXEC || errno == EACCES) {

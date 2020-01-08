@@ -405,7 +405,7 @@ int check(const char *path, unsigned int status_flags, void *payload) {
 	return 0;
 }
 
-static void commit_now(struct bufferevent* conn) {
+static void commit_now(struct event_base* eventbase, struct bufferevent* conn) {
 	int changes = 0;
 	git_status_options opt = GIT_STATUS_OPTIONS_INIT;
 	opt.show = GIT_STATUS_SHOW_INDEX_ONLY;
@@ -421,7 +421,7 @@ static void commit_now(struct bufferevent* conn) {
 	struct continuation after = {
 		(void*)post_pre_commit, conn
 	};
-	HOOK_RUN("pre-commit",after);
+	HOOK_RUN(eventbase, "pre-commit",after);
 	// now-ish
 }
 

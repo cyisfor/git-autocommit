@@ -11,12 +11,10 @@ void rundatting(evutil_socket_t nothing, short events, void* arg) {
 	c.func(c.arg);
 }
 
-void continuation_run(const struct continuation c) {
+void continuation_run(struct event_base* eventbase, const struct continuation c) {
 	if(c.func == NULL) return;
 	struct continuation* cc = malloc(sizeof(struct continuation));
 	cc->func = c.func;
 	cc->arg = c.arg;
-	char* derp = (char*)base;
-	assert(derp);
-	event_base_once(derp, -1, EV_TIMEOUT, rundatting, cc, NULL);
+	event_base_once(eventbase, -1, EV_TIMEOUT, rundatting, cc, NULL);
 }
