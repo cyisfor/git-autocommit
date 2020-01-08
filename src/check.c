@@ -113,6 +113,7 @@ static void on_read(struct bufferevent* conn, void* udata) {
 			data->eventbase = eventbase;
 			commit_now(data);
 			bufferevent_write(conn, &op, 1);
+		}
 			break;
 		case INFO: {
 			pid_t pid = getpid();
@@ -427,8 +428,8 @@ static void commit_now(struct commit_later_data* data) {
 	}
 
 	struct continuation after = {
-		.eventbase = eventbase,
-		.func = post_pre_commit,
+		.eventbase = data->eventbase,
+		.func = (void*)post_pre_commit,
 		.arg = data
 	};
 	HOOK_RUN(data->eventbase, "pre-commit",after);

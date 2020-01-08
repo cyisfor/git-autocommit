@@ -112,7 +112,8 @@ void kill_remote(struct bufferevent* conn) {
 }
 
 static
-void on_events(struct bufferevent *conn, short events, void *ptr) {
+void on_events(struct bufferevent *conn, short events, void *udata) {
+	struct event_base* eventbase = (struct event_base*)udata;
 	if(events & BEV_EVENT_CONNECTED) {
 		puts("connect okay.");
 	} else if(events & (BEV_EVENT_TIMEOUT)) {
@@ -123,7 +124,7 @@ void on_events(struct bufferevent *conn, short events, void *ptr) {
 		if(reconnecting) {
 			evtimer_add(trying, &trying_timeout);
 		} else {
-			event_base_loopexit(base, NULL);
+			event_base_loopexit(eventbase, NULL);
 		}
 	}
 }
@@ -186,7 +187,7 @@ static
 void try_connect(evutil_socket_t, short, void *);
 
 static
-void reconnect(int sock);
+void reconnect(struct event_base* eventbase, int sock);
 
 void spawn_server(struct event_base* eventbase) {
 	if(++tries > 3) {
@@ -218,7 +219,7 @@ void spawn_server(struct event_base* eventbase) {
 	// do not unblock signals, since we're also duping our signalfd.
 	int server_pid = fork();
 	if(server_pid == 0) {
-		event_reinit(base);
+		event_reinit(eventbase);
 		setsid();
 
 /*				dup2(sock,3);
@@ -272,14 +273,15 @@ void spawn_server(struct event_base* eventbase) {
 }
 
 static
-void try_connect(evutil_socket_t, short, void * udata) {
+void try_connect(evutil_socket_t nothing, short nothing2, void * udata) {
 	struct event_base* eventbase = (struct event_base*)udata;
 	return reconnect(eventbase, net_connect());
 }
 
 static
-void wrote_response(struct bufferevent* conn, void* arg) {
-	bufferevent_setcb(conn, get_reply, NULL, on_events, NULL);
+void wrote_response(struct bufferevent* conn, void* udata) {
+	struct event_base* eventbase = (struct event_base*)udata;
+	bufferevent_setcb(conn, get_reply, NULL, on_events, eventbase);
 	bufferevent_setwatermark(conn, EV_READ, 1, 1 + sizeof(struct info_message));
 	bufferevent_disable(conn, EV_WRITE);
 	bufferevent_enable(conn, EV_READ);
@@ -304,7 +306,7 @@ void reconnect(struct event_base* eventbase, int sock) {
 			.tv_usec = 500000
 		};
 		bufferevent_set_timeouts(conn, &timeout, &timeout);
-		bufferevent_setcb(conn, get_reply, wrote_response, on_events, NULL);
+		bufferevent_setcb(conn, get_reply, wrote_response, on_events, eventbase);
 		bufferevent_setwatermark(conn, EV_WRITE, 1, 1);
 		bufferevent_write(conn, &op, 1);
 		bufferevent_enable(conn, EV_WRITE);
