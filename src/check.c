@@ -151,13 +151,11 @@ static
 void maybe_commit(u32 lines, u32 words, u32 characters);
 
 // don't cache the head, because other processes could commit to the repository while we're running!
-static git_commit* get_head(void) {
-	git_reference* master = NULL;
+static git_commit* get_head(git_reference* headref) {
 	git_reference* derp = NULL;
 	git_commit* head = NULL;
-	repo_check(git_repository_head(&master, repo));
 	//printf("umm %s\n",git_reference_shorthand(master));
-	repo_check(git_reference_resolve(&derp, master));
+	repo_check(git_reference_resolve(&derp, headref));
 		
 	//printf("umm %s\n",git_reference_shorthand(derp));
 	const git_oid *oid = git_reference_target(derp);
@@ -169,7 +167,6 @@ static git_commit* get_head(void) {
 	repo_check(git_commit_lookup(&head, repo, oid));
 
 	git_reference_free(derp);
-	git_reference_free(master);
 	return head;
 }
 
@@ -197,9 +194,12 @@ static void queue_commit(void) {
 		ONE(APPLY_MAILBOX);
 		ONE(APPLY_MAILBOX_OR_REBASE);
 		};
-	
-	git_commit* head = get_head();
-	repo_check(git_commit_tree(&headtree, head));	
+
+	git_reference* headref = NULL;
+	repo_check(git_repository_head(&headref, repo));
+	git_commit* head = get_head(headref);
+	repo_check(git_commit_tree(&headtree, head));
+	git_reference_free(headref);	
 	git_commit_free(head);
 
 	git_diff_options options = GIT_DIFF_OPTIONS_INIT;
@@ -424,7 +424,7 @@ static void commit_now(struct commit_later_data* data) {
 		#define LITLEN(s) s, (sizeof(s)-1)
 		ignore(write(1,LITLEN("no empty commits please.\n")));
 		// no empty commits, please
-		//return; DEBUGGING
+		return;
 	}
 
 	struct continuation after = {
@@ -461,7 +461,10 @@ static void post_pre_commit(void* udata) {
 
 	git_oid new_commit;
 
-	git_commit* head = get_head();
+	git_reference* headref = NULL;
+	repo_check(git_repository_head(&headref, repo));
+	git_commit* head = get_head(headref);
+
 	git_buf commit_content = {};
 	repo_check(git_commit_create_buffer(
 							 &commit_content,
@@ -509,7 +512,15 @@ static void post_pre_commit(void* udata) {
 				   "gpgsig"));
 
 	gpgme_free(gpgsigdata);
-	
+
+	repo_check(git_reference_set_target(
+				   &headref,
+				   headref,
+				   &new_commit,
+				   "automatic commit"));
+
+	git_reference_free(headref);
+
 	git_index_write(idx);
 	git_index_free(idx);
 
