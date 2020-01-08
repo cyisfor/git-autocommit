@@ -245,6 +245,7 @@ void spawn_server(void) {
 				waitpid(gdb,NULL,0);
 				sleep(3);
 			}
+			event_reinit(base);
 			evtimer_del(trying);
 			// call check_init directly, instead of wasting time with execve
 			check_init(sock);

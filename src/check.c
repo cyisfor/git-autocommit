@@ -411,7 +411,7 @@ static void commit_now(struct bufferevent* conn) {
 		#define LITLEN(s) s, (sizeof(s)-1)
 		ignore(write(1,LITLEN("no empty commits please.\n")));
 		// no empty commits, please
-		return;
+		//return; DEBUGGING
 	}
 
 	struct continuation after = {
