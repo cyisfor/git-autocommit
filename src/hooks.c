@@ -18,7 +18,6 @@
 #include <string.h> // memcmp
 #include <limits.h> // PATH_MAX
 #include <sys/stat.h>
-#include <error.h>
 #include <errno.h>
 
 #define LITLEN(s) s,sizeof(s)-1

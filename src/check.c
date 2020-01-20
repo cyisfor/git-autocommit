@@ -29,7 +29,7 @@
 #include <sys/wait.h> // waitpid
 #include <ctype.h> // isspace
 #include <stdbool.h>
-#include <error.h>
+#include <err.h>
 
 typedef uint32_t u32;
 
@@ -104,7 +104,7 @@ static void on_read(struct bufferevent* conn, void* udata) {
 		}
 		break;
 		default:
-			error(23,0,"bad message %d\n",op);
+			errx(23,"bad message %d\n",op);
 		};
 	}
 }

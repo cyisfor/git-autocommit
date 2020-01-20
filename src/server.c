@@ -13,9 +13,6 @@
 #include <stdbool.h>
 #include <sys/prctl.h>
 
-#include <error.h>
-#include <errno.h> 
-
 int main(int argc, char *argv[])
 {
 	if(argc == 1) {

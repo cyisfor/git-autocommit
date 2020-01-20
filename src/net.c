@@ -6,7 +6,7 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <fcntl.h>
-#include <error.h>
+#include <err.h>
 #include <errno.h>
 #include <stdbool.h>
 #include <assert.h>
@@ -27,11 +27,11 @@ int net_bind(void) {
 	int sock = socket(AF_UNIX, SOCK_STREAM, 0);
 	if(0!=bind(sock,(struct sockaddr*)&addr, sizeof(addr))) {
 		if(errno != EADDRINUSE)
-			error(errno,errno,"bind failed");
+			err(errno,"bind failed");
 		return -1;
 	}
 /*	if(0!=listen(sock, 0x10))
-		error(errno,errno,"listen failed");
+		err(errno,"listen failed");
 */
 	fcntl(sock,F_SETFL,fcntl(sock,F_GETFL) | O_NONBLOCK);
 	return sock;
@@ -43,7 +43,7 @@ int net_connect(void) {
 	if(0 != connect(sock,(struct sockaddr*)&addr,sizeof(addr))) {
 		if(errno == ECONNREFUSED)
 			return -1;
-		error(errno,errno,"connect failed");
+		err(errno,"connect failed");
 	}
 	fcntl(sock,F_SETFL,fcntl(sock,F_GETFL) | O_NONBLOCK);
 	return sock;

@@ -28,7 +28,6 @@
 #include <fcntl.h> // open* O_PATH
 #include <pwd.h> // getpw*
 #include <sys/stat.h> // mkdir
-#include <error.h> //
 #include <sys/prctl.h>
 #include <stdio.h>
 
