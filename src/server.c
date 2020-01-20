@@ -12,6 +12,8 @@
 #include <sys/un.h>
 #include <stdbool.h>
 #include <sys/prctl.h>
+#include <string.h> // strcpy
+
 
 int main(int argc, char *argv[])
 {
