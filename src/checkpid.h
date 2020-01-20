@@ -1,5 +1,5 @@
 #include "continuation.h"
-void checkpid_init(void);
+void checkpid_init(struct event_base* eventbase);
 void checkpid_after(int pid, struct continuation later);
 int checkpid_fork();
 

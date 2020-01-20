@@ -113,7 +113,7 @@ int checkpid_fork() {
 	return pid;
 }
 
-void checkpid_init(void) {
+void checkpid_init(struct event_base* eventbase) {
 	sigemptyset(&blocked);
 	sigaddset(&blocked, SIGCHLD);
 	ensure0(sigprocmask(SIG_BLOCK, &blocked, NULL));
@@ -121,7 +121,7 @@ void checkpid_init(void) {
 	int s = signalfd(-1, &blocked, 0);
 	evutil_make_socket_nonblocking(s);
 	ensure_ge(s,0);
-	struct event* ev = event_new(base, s,
+	struct event* ev = event_new(eventbase, s,
 															 EV_READ|EV_PERSIST,
 															 (void*)read_from_signalfd, NULL);
 	event_add(ev, NULL);

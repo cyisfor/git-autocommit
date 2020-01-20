@@ -1,9 +1,9 @@
 #define _GNU_SOURCE
-#include "eventbase.h"
 #include "ops.h"
 #include "repo.h"
 #include "net.h"
 #include "check.h"
+#include "eventbase.h"
 
 #include <event2/bufferevent.h>
 #include <event2/buffer.h>
@@ -112,7 +112,8 @@ void kill_remote(struct bufferevent* conn) {
 }
 
 static
-void on_events(struct bufferevent *conn, short events, void *ptr) {
+void on_events(struct bufferevent *conn, short events, void *udata) {
+	struct event_base* eventbase = (struct event_base*)udata;
 	if(events & BEV_EVENT_CONNECTED) {
 		puts("connect okay.");
 	} else if(events & (BEV_EVENT_TIMEOUT)) {
@@ -123,7 +124,7 @@ void on_events(struct bufferevent *conn, short events, void *ptr) {
 		if(reconnecting) {
 			evtimer_add(trying, &trying_timeout);
 		} else {
-			event_base_loopexit(base, NULL);
+			event_base_loopexit(eventbase, NULL);
 		}
 	}
 }
@@ -183,15 +184,16 @@ void get_reply(struct bufferevent *conn, void *ctx) {
 jmp_buf start_watcher;
 
 static
-void try_connect(void);
-static
-void reconnect(int sock);
+void try_connect(evutil_socket_t, short, void *);
 
-void spawn_server(void) {
+static
+void reconnect(struct event_base* eventbase, int sock);
+
+void spawn_server(struct event_base* eventbase) {
 	if(++tries > 3) {
 		if(debugging_fork) {
 			sleep(3);
-			return try_connect();
+			return try_connect(0,0,eventbase);
 		} else {
 			printf("Couldn't spawn server %d\n",tries);
 			abort();
@@ -217,6 +219,7 @@ void spawn_server(void) {
 	// do not unblock signals, since we're also duping our signalfd.
 	int server_pid = fork();
 	if(server_pid == 0) {
+		event_reinit(eventbase);
 		setsid();
 
 /*				dup2(sock,3);
@@ -244,9 +247,10 @@ void spawn_server(void) {
 				waitpid(gdb,NULL,0);
 				sleep(3);
 			}
+			event_reinit(eventbase);
 			evtimer_del(trying);
 			// call check_init directly, instead of wasting time with execve
-			check_init(sock);
+			check_init(eventbase, sock);
 			puts("server intialized.");
 
 			reconnecting = false;
@@ -265,26 +269,28 @@ void spawn_server(void) {
 	printf("started server %d. We client now.\n",server_pid);
 	net_forkhack(server_pid);
 	//usleep(100000); // XXX: mysterious race condition... activity on the client's sockets created AFTER the server is forked, are reported to the server process?
-	return reconnect(sock); // we should be able to connect right away since listen() already called
+	return reconnect(eventbase, sock); // we should be able to connect right away since listen() already called
 }
 
 static
-void try_connect(void) {
-	return reconnect(net_connect());
+void try_connect(evutil_socket_t nothing, short nothing2, void * udata) {
+	struct event_base* eventbase = (struct event_base*)udata;
+	return reconnect(eventbase, net_connect());
 }
 
 static
-void wrote_response(struct bufferevent* conn, void* arg) {
-	bufferevent_setcb(conn, get_reply, NULL, on_events, NULL);
+void wrote_response(struct bufferevent* conn, void* udata) {
+	struct event_base* eventbase = (struct event_base*)udata;
+	bufferevent_setcb(conn, get_reply, NULL, on_events, eventbase);
 	bufferevent_setwatermark(conn, EV_READ, 1, 1 + sizeof(struct info_message));
 	bufferevent_disable(conn, EV_WRITE);
 	bufferevent_enable(conn, EV_READ);
 }
 
 static
-void reconnect(int sock) {
+void reconnect(struct event_base* eventbase, int sock) {
 	if(sock == -1) {
-		return spawn_server();
+		return spawn_server(eventbase);
 	}
 
 	if(conn) {
@@ -292,7 +298,7 @@ void reconnect(int sock) {
 		bufferevent_free(conn);
 	}
 	puts("Starting client");
-	conn = bufferevent_socket_new(base, sock, BEV_OPT_CLOSE_ON_FREE);
+	conn = bufferevent_socket_new(eventbase, sock, BEV_OPT_CLOSE_ON_FREE);
 	
 	if(conn) {
 		const struct timeval timeout = {
@@ -300,10 +306,11 @@ void reconnect(int sock) {
 			.tv_usec = 500000
 		};
 		bufferevent_set_timeouts(conn, &timeout, &timeout);
-		bufferevent_setcb(conn, get_reply, wrote_response, on_events, NULL);
+		bufferevent_setcb(conn, get_reply, wrote_response, on_events, eventbase);
 		bufferevent_setwatermark(conn, EV_WRITE, 1, 1);
 		bufferevent_write(conn, &op, 1);
 		bufferevent_enable(conn, EV_WRITE);
+		reconnecting = false;
 	} else {
 		perror("um");
 		int pid = net_pid(sock);
@@ -352,7 +359,7 @@ int main(int argc, char *argv[])
 	// now everything written to "message" goes to stdout (emacs)
 	// while stdout/err goes to a log
 
-	eventbase_init();
+	struct event_base* eventbase = eventbase_init();
 
 	void bye(const char* fmt, ...) {
 		va_list args;
@@ -415,12 +422,12 @@ int main(int argc, char *argv[])
 		 if bound, listen, fork and hand over the socket, then go back to connecting
 	*/
 
-	trying = evtimer_new(base, (void*)try_connect, NULL);
+	trying = evtimer_new(eventbase, (void*)try_connect, eventbase);
 	const struct timeval now = {};
 	evtimer_add(trying, &now);
 
 	debugging_fork = getenv("debugfork") != NULL;
 
-	event_base_dispatch(base);
+	event_base_dispatch(eventbase);
 	return 0;
 }

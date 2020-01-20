@@ -1,10 +1,13 @@
 #include "my_cflags.h"
 
+#include "eventbase.h"
 #include "ensure.h"
 #include "repo.h"
 #include "hooks.h"
 #include "myassert.h"
 #include "checkpid.h"
+
+#include <sys/wait.h> // waitpid
 
 #include <sys/mman.h> // mmap
 
@@ -80,9 +83,9 @@ static void load(const char* name, size_t nlen) {
 			setenv("src",csource,1);
 			setenv("dst",so,1);
 			setenv("CFLAGS",MY_CFLAGS,1); // def this
-			system("exec ${LIBTOOL} --mode=compile --tag=CC ${CC} -shared -fPIC ${CFLAGS} -c -o ${src}.lo ${src}");
+			ensure0(system("exec ${LIBTOOL} --mode=compile --tag=CC ${CC} -ggdb -shared -fPIC ${CFLAGS} -c -o ${src}.lo ${src}"));
 			setenv("LDFLAGS",MY_LDFLAGS,1); // def this
-			int res = system("exec ${LIBTOOL} --mode=link --tag=CC ${CC} -shared -fPIC ${CFLAGS} -rpath `pwd` -o ${dst} ${src}.lo ${LDFLAGS}");
+			int res = system("exec ${LIBTOOL} --mode=link --tag=CC ${CC} -ggdb -shared -fPIC ${CFLAGS} -rpath `pwd` -o ${dst} ${src}.lo ${LDFLAGS}");
 			if(res == 0) {
 				puts("yay, compiled!");
 			} else {
@@ -90,7 +93,12 @@ static void load(const char* name, size_t nlen) {
 			}
 			exit(res);
 		}
-		waitpid(pid, NULL, 0);
+		int status = 0;
+		if(waitpid(pid, &status, 0));
+		if(!(WIFEXITED(status) && 0 == WEXITSTATUS(status))) {
+			printf("compile died with %d\n",
+				   status);
+		}
 	}
 
 	struct hook* hook = NULL;
@@ -104,15 +112,19 @@ static void load(const char* name, size_t nlen) {
 			hook->islib = true; // eh
 	}
 
-	void load_so() {
+	void load_so2(bool tried) {
 		lt_dladvise advice;
 		int res = lt_dladvise_init(&advice);
 		assert(res == 0);
 		lt_dladvise_local(&advice);
 		lt_dlhandle dll = lt_dlopenadvise(so,advice);
 		if(!dll) {
-			puts(lt_dlerror());
-			abort();
+			if(tried) {
+				puts(lt_dlerror());
+				abort();
+			}
+			lt_dladvise_destroy(&advice);
+			return load_so2(true);
 		}
 		lt_dladvise_destroy(&advice);
 		assert(dll);
@@ -129,6 +141,10 @@ static void load(const char* name, size_t nlen) {
 		}
 		hook->islib = true;
 		return;
+	}
+
+	void load_so(void) {
+		load_so2(false);
 	}
 
 	struct stat cstat, sostat;
@@ -157,7 +173,7 @@ static void load(const char* name, size_t nlen) {
 	abort(); // nuever 
 }
 
-void hook_run(const char* name, const size_t nlen, struct continuation after) {
+void hook_run(struct event_base* eventbase, const char* name, const size_t nlen, struct continuation after) {
 	size_t i = 0;
 	for(;i<nhooks;++i) {
 		if(hooks[i].name.len == nlen &&
@@ -196,6 +212,7 @@ void hook_run(const char* name, const size_t nlen, struct continuation after) {
 				puts("semaphore waited!");
 				munmap(mem,sizeof(sem_t));
 			}
+			event_reinit(eventbase);
 			char* args[] = { hook->u.path, NULL };
 			execv(hook->u.path,args);
 			if(errno == ENOEXEC || errno == EACCES) {
@@ -220,7 +237,7 @@ void hook_run(const char* name, const size_t nlen, struct continuation after) {
 	}
 }
 
-void hooks_init(void) {
+void hooks_init(struct event_base* eventbase) {
 	assert0(chdir(git_repository_path(repo)));
 	mkdir("hooks",0755);
 	assert0(chdir("hooks"));
@@ -230,5 +247,5 @@ void hooks_init(void) {
 	load(LITLEN("pre-commit"));
 	load(LITLEN("post-commit"));
 	assert0(chdir(git_repository_workdir(repo)));
-	checkpid_init();
+	checkpid_init(eventbase);
 }

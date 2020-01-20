@@ -2,6 +2,7 @@
 #include "net.h"
 #include "repo.h"
 #include "min.h"
+#include "ensure.h"
 
 #include <sys/socket.h>
 #include <sys/un.h>
@@ -25,6 +26,8 @@ void net_set_addr(void) {
 
 int net_bind(void) {
 	int sock = socket(AF_UNIX, SOCK_STREAM, 0);
+	int yes = 1;
+	ensure_eq(0,setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes)));
 	if(0!=bind(sock,(struct sockaddr*)&addr, sizeof(addr))) {
 		if(errno != EADDRINUSE)
 			err(errno,"bind failed");

@@ -18,6 +18,9 @@
 #include <git2/commit.h>
 #include <git2/signature.h>
 #include <git2/status.h>
+#include <git2/buffer.h>
+
+#include <gpgme/gpgme.h>
 
 #include <assert.h>
 #include <stdlib.h> // malloc
@@ -30,6 +33,17 @@
 #include <ctype.h> // isspace
 #include <stdbool.h>
 #include <err.h>
+
+gpgme_ctx_t gpgme_ctx = NULL;
+
+static
+void gpg_check(int res) {
+	if(res == GPG_ERR_NO_ERROR) return;
+	fprintf(stderr, "GPG failed %s %s\n",
+			gpgme_strerror(res),
+			gpgme_strsource(res));
+	abort();
+}
 
 typedef uint32_t u32;
 
@@ -53,12 +67,18 @@ void just_exit() {
 
 #pragma GCC diagnostic ignored "-Wtrampolines"
 
-static void commit_now(struct bufferevent* conn);
+struct commit_later_data {
+	struct bufferevent* conn;
+	struct event_base* eventbase;
+};
+
+static void commit_now(struct commit_later_data* data);
 
 bool quitting = false;
 
 static void
-on_events(struct bufferevent *conn, short events, void *ctx) {
+on_events(struct bufferevent *conn, short events, void *udata) {
+	struct event_base* eventbase = (struct event_base*)udata;
 	if(events & BEV_EVENT_ERROR) {
 		perror("connection error");
 	} else if(events & BEV_EVENT_EOF) {
@@ -68,11 +88,12 @@ on_events(struct bufferevent *conn, short events, void *ctx) {
 	} 
 	bufferevent_free(conn);
 	if(quitting) {
-		event_base_loopexit(base, NULL);
+		event_base_loopexit(eventbase, NULL);
 	}
 }
 
 static void on_read(struct bufferevent* conn, void* udata) {
+	struct event_base* eventbase = (struct event_base*)udata;
 	struct evbuffer* input = bufferevent_get_input(conn);
 	size_t avail = evbuffer_get_length(input);
 	bufferevent_enable(conn, EV_WRITE);
@@ -86,9 +107,13 @@ static void on_read(struct bufferevent* conn, void* udata) {
 			quitting = true;
 			bufferevent_write(conn, &op, 1);
 			return;
-		case FORCE:
-			commit_now(conn);
+		case FORCE: {
+			struct commit_later_data* data = malloc(sizeof(struct commit_later_data));
+			data->conn = conn;
+			data->eventbase = eventbase;
+			commit_now(data);
 			bufferevent_write(conn, &op, 1);
+		}
 			break;
 		case INFO: {
 			pid_t pid = getpid();
@@ -112,10 +137,12 @@ static void on_read(struct bufferevent* conn, void* udata) {
 static void
 on_accept(struct evconnlistener *listener,
 					evutil_socket_t fd, struct sockaddr *address, int socklen,
-					void *ctx) {
-	struct bufferevent* conn = bufferevent_socket_new(base, fd,
-																										BEV_OPT_CLOSE_ON_FREE);
-	bufferevent_setcb(conn, on_read, NULL, on_events, NULL);
+					void *udata) {
+	struct event_base* eventbase = (struct event_base*)udata;
+	struct bufferevent* conn = bufferevent_socket_new(
+		eventbase, fd,
+		BEV_OPT_CLOSE_ON_FREE);
+	bufferevent_setcb(conn, on_read, NULL, on_events, eventbase);
 	bufferevent_enable(conn, EV_READ);
 	activity_poke();
 }
@@ -124,13 +151,11 @@ static
 void maybe_commit(u32 lines, u32 words, u32 characters);
 
 // don't cache the head, because other processes could commit to the repository while we're running!
-static git_commit* get_head(void) {
-	git_reference* master = NULL;
+static git_commit* get_head(git_reference* headref) {
 	git_reference* derp = NULL;
 	git_commit* head = NULL;
-	repo_check(git_repository_head(&master, repo));
 	//printf("umm %s\n",git_reference_shorthand(master));
-	repo_check(git_reference_resolve(&derp, master));
+	repo_check(git_reference_resolve(&derp, headref));
 		
 	//printf("umm %s\n",git_reference_shorthand(derp));
 	const git_oid *oid = git_reference_target(derp);
@@ -142,7 +167,6 @@ static git_commit* get_head(void) {
 	repo_check(git_commit_lookup(&head, repo, oid));
 
 	git_reference_free(derp);
-	git_reference_free(master);
 	return head;
 }
 
@@ -170,9 +194,12 @@ static void queue_commit(void) {
 		ONE(APPLY_MAILBOX);
 		ONE(APPLY_MAILBOX_OR_REBASE);
 		};
-	
-	git_commit* head = get_head();
-	repo_check(git_commit_tree(&headtree, head));	
+
+	git_reference* headref = NULL;
+	repo_check(git_repository_head(&headref, repo));
+	git_commit* head = get_head(headref);
+	repo_check(git_commit_tree(&headtree, head));
+	git_reference_free(headref);	
 	git_commit_free(head);
 
 	git_diff_options options = GIT_DIFF_OPTIONS_INIT;
@@ -378,7 +405,7 @@ static void queue_commit(void) {
 	maybe_commit(lines, words, characters);
 }
 
-static void post_pre_commit(struct bufferevent* conn);
+static void post_pre_commit(void* udata);
 
 static
 int check(const char *path, unsigned int status_flags, void *payload) {
@@ -387,7 +414,7 @@ int check(const char *path, unsigned int status_flags, void *payload) {
 	return 0;
 }
 
-static void commit_now(struct bufferevent* conn) {
+static void commit_now(struct commit_later_data* data) {
 	int changes = 0;
 	git_status_options opt = GIT_STATUS_OPTIONS_INIT;
 	opt.show = GIT_STATUS_SHOW_INDEX_ONLY;
@@ -401,14 +428,17 @@ static void commit_now(struct bufferevent* conn) {
 	}
 
 	struct continuation after = {
-		(void*)post_pre_commit, conn
+		.eventbase = data->eventbase,
+		.func = post_pre_commit,
+		.arg = data
 	};
-	HOOK_RUN("pre-commit",after);
+	HOOK_RUN(data->eventbase, "pre-commit",after);
 	// now-ish
 }
 
-static void post_pre_commit(struct bufferevent* conn) {
-	bufferevent_free(conn);
+static void post_pre_commit(void* udata) {
+	struct commit_later_data* data = (struct commit_later_data*) udata;
+	bufferevent_free(data->conn);
 
 	git_index* idx = NULL;
 	git_signature *me = NULL;
@@ -431,12 +461,14 @@ static void post_pre_commit(struct bufferevent* conn) {
 
 	git_oid new_commit;
 
-	git_commit* head = get_head();
+	git_reference* headref = NULL;
+	repo_check(git_repository_head(&headref, repo));
+	git_commit* head = get_head(headref);
 
-	repo_check(git_commit_create(
-							 &new_commit,
+	git_buf commit_content = {};
+	repo_check(git_commit_create_buffer(
+							 &commit_content,
 							 repo,
-							 "HEAD", /* name of ref to update */
 							 me, /* author */
 							 me, /* committer */
 							 "UTF-8", /* message encoding */
@@ -444,6 +476,50 @@ static void post_pre_commit(struct bufferevent* conn) {
 							 tree, /* root tree */
 							 1,                           /* parent count */
 							 (const git_commit**) &head)); /* parents */
+	assert(strlen(commit_content.ptr) == commit_content.size);
+	/* now sign the contents with gpgme */
+	gpgme_data_t gpgcommit;
+	gpg_check(gpgme_data_new_from_mem(
+		&gpgcommit, 
+		commit_content.ptr,
+		commit_content.size,
+		0));
+	gpgme_data_t gpgsig;
+	gpg_check(gpgme_data_new(&gpgsig));
+
+	const char* fpr = getenv("AUTOCOMMIT_KEY");
+	ensure_ne(NULL, fpr);
+	gpgme_key_t key;
+	gpg_check(gpgme_get_key(gpgme_ctx, fpr, &key, 1));
+	gpg_check(gpgme_signers_add(gpgme_ctx, key));
+	
+	gpg_check(gpgme_op_sign(gpgme_ctx, gpgcommit,
+							gpgsig, GPGME_SIG_MODE_DETACH));
+
+	gpgme_signers_clear(gpgme_ctx);
+	gpgme_data_release(gpgcommit);
+	
+	size_t gpgsiglen = 0;
+	char* gpgsigdata = gpgme_data_release_and_get_mem(gpgsig, &gpgsiglen);
+	/* XXX: this won't buffer overrun, will it? */
+	gpgsigdata[gpgsiglen] = 0;
+	
+	repo_check(git_commit_create_with_signature(
+				   &new_commit,
+				   repo,
+				   commit_content.ptr,
+				   gpgsigdata,
+				   "gpgsig"));
+
+	gpgme_free(gpgsigdata);
+
+	repo_check(git_reference_set_target(
+				   &headref,
+				   headref,
+				   &new_commit,
+				   "automatic commit"));
+
+	git_reference_free(headref);
 
 	git_index_write(idx);
 	git_index_free(idx);
@@ -459,11 +535,12 @@ static void post_pre_commit(struct bufferevent* conn) {
 	git_signature_free(me);
 
 	struct continuation nothing = {};
-	HOOK_RUN("post-commit",nothing);
+	HOOK_RUN(data->eventbase, "post-commit",nothing);
+	free(data);
 }
 
 static void commit_later(evutil_socket_t nope, short events, void *arg) {
-	commit_now((struct bufferevent*)arg);
+	commit_now(arg);
 }
 
 static void maybe_commit(u32 lines, u32 words, u32 characters) {
@@ -541,7 +618,7 @@ static void maybe_commit(u32 lines, u32 words, u32 characters) {
 
 static
 void listen_error(struct evconnlistener * listener, void * ctx) {
-	struct event_base *base = evconnlistener_get_base(listener);
+	struct event_base *eventbase = evconnlistener_get_base(listener);
 	int err = EVUTIL_SOCKET_ERROR();
 	{ char buf[0x1000];
 		ignore(write(1,buf,snprintf(
@@ -552,21 +629,37 @@ void listen_error(struct evconnlistener * listener, void * ctx) {
 	}
 	evconnlistener_free(listener);
 	sleep(5);
-	event_base_loopexit(base, NULL);
+	event_base_loopexit(eventbase, NULL);
 	ignore(write(1,LITLEN("Halting.\n")));
 }
 
-void check_init(int sock) {
-	struct bufferevent* conn = bufferevent_socket_new(
-		base, sock, BEV_OPT_CLOSE_ON_FREE);
-	ci.later = evtimer_new(base, (void*)commit_later, conn);
+void check_init(struct event_base* eventbase, int sock) {
 
-	activity_init();
-	hooks_init();
+	gpgme_check_version(NULL);
+	gpg_check(gpgme_new(&gpgme_ctx));
+	gpgme_set_armor(gpgme_ctx, 1);
+	gpg_check(gpgme_set_keylist_mode(
+				  gpgme_ctx,
+				  GPGME_KEYLIST_MODE_LOCAL));
+#if 0
+	gpg_check(gpgme_set_pinentry_mode(
+				  gpgme_ctx,
+				  GPGME_PINENTRY_MODE_ERROR));
+	gpg_check(gpgme_set_locale(gpgme_ctx, ???, "UTF-8"));
+#endif
+
+	struct commit_later_data* data  = malloc(sizeof(struct commit_later_data));
+	data->conn = bufferevent_socket_new(
+		eventbase, sock, BEV_OPT_CLOSE_ON_FREE);
+	data->eventbase = eventbase;
+	ci.later = evtimer_new(eventbase, (void*)commit_later, data);
+
+	activity_init(eventbase);
+	hooks_init(eventbase);
 
 	struct evconnlistener* listener = evconnlistener_new(
-		base,
-		on_accept, NULL,
+		eventbase,
+		on_accept, eventbase,
 		LEV_OPT_CLOSE_ON_EXEC |
 		LEV_OPT_CLOSE_ON_FREE |
 		LEV_OPT_REUSEABLE |
