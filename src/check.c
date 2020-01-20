@@ -20,7 +20,7 @@
 #include <git2/status.h>
 #include <git2/buffer.h>
 
-#include <gpgme/gpgme.h>
+#include <gpgme.h>
 
 #include <assert.h>
 #include <stdlib.h> // malloc
