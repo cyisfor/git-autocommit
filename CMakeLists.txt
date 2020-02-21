@@ -67,6 +67,7 @@ else()
 endif()
 
 target_link_libraries(autocommit PUBLIC
+  cstuff
   PkgConfig::GPGME
   PkgConfig::EVENT
   PkgConfig::GIT

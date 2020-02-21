@@ -1,19 +1,17 @@
+#define _GNU_SOURCE 			/* dlmopen */
 #include "mystring.h"
 
 #include "eventbase.h"
 #include "ensure.h"
 #include "repo.h"
 #include "hooks.h"
-#include "myassert.h"
 #include "checkpid.h"
 
 #include <sys/wait.h> // waitpid
-
 #include <sys/mman.h> // mmap
 
 #include <semaphore.h>
-
-#include <ltdl.h> // lt_dlopen, lt_dlsym
+#include <dl.h> // dlopen, dlsym
 #include <unistd.h> // fork, exec*
 #include <stdarg.h> // va_*
 #include <stdio.h>
@@ -23,22 +21,8 @@
 #include <sys/stat.h>
 #include <errno.h>
 
-#define LITLEN(s) s,sizeof(s)-1
-
-typedef struct buf {
-	char* base;
-	int len;
-} buf;
-
-static int compare(struct buf* a, struct buf* b) {
-	int len = a->len;
-	if(len != b->len)
-		return len - b->len;
-	return memcmp(a->base, b->base, len);
-}
-
 struct hook {
-	buf name;
+	string name;
 	bool islib;
 	union {
 		struct {
@@ -48,10 +32,6 @@ struct hook {
 		char path[PATH_MAX];
 	} u;
 };
-
-#ifndef PLUGIN_FLAGS
-#define PLUGIN_FLAGS "-g", "-O2",
-#endif
 
 // tsearch is too opaque... can't debug problems!
 // this is a tiny array anyway
@@ -129,30 +109,27 @@ static void load(const char* name, size_t nlen) {
 	}
 
 	void load_so2(bool tried) {
-		lt_dladvise advice;
-		int res = lt_dladvise_init(&advice);
-		assert(res == 0);
-		lt_dladvise_local(&advice);
-		lt_dlhandle dll = lt_dlopenadvise(so,advice);
+		void* dll = dlmopen(LM_ID_NEWLM,
+							so,
+							RTLD_NOW | 
+							RTLD_LOCAL);
 		if(!dll) {
 			if(tried) {
-				puts(lt_dlerror());
+				fputs(stderr, dlerror());
+				fputc(stderr, '\n');
 				abort();
 			}
-			lt_dladvise_destroy(&advice);
 			build_so();
 			return load_so2(true);
 		}
-		lt_dladvise_destroy(&advice);
-		assert(dll);
 
 		typedef void* (*initter)(void);
-		initter init = (initter) lt_dlsym(dll,"init");
+		initter init = (initter) dlsym(dll,"init");
 		init_hook();
 		if(init) {
 			hook->u.run.data = init();
 		}
-		hook->u.run.f = (runner) lt_dlsym(dll,"run");
+		hook->u.run.f = (runner) dlsym(dll,"run");
 		if(hook->u.run.f == NULL) {
 			fprintf(stderr, "your hook %.*s needs a run function.", (int)nlen, name);
 		}
@@ -205,7 +182,8 @@ void hook_run(struct event_base* eventbase, const char* name, const size_t nlen,
 	}
 	struct hook* hook = hooks+i;
 
-	if(hook->islib && hook->u.run.f) {
+	if(hook->islib) {
+		assert(hook->u.run.f); 	/* if path is filled out this will be garbage though */
 		hook->u.run.f(hook->u.run.data, after);
 	} else {
 		// the PID cannot be allowed to exit before we get our after handler in the list
@@ -260,7 +238,6 @@ void hooks_init(struct event_base* eventbase) {
 	assert0(chdir("hooks"));
 	setenv("LD_LIBRARY_PATH",".",1);
 	char buf[PATH_MAX];
-	lt_dlinit();
 	load(LITLEN("pre-commit"));
 	load(LITLEN("post-commit"));
 	assert0(chdir(git_repository_workdir(repo)));

@@ -4,8 +4,8 @@
 # for a CMakeLists.txt file
 # THREE LANGUAGES IN ONE FILE
 set(COMPILING_MODULE ON)
-set(name <?cs name ?>)
-set(src <?cs src ?>)
-set(dst <?cs dest ?>)
-set(location <?cs location ?>)
+set(name <?cS name ?>)
+set(src <?cS src ?>)
+set(dst <?cS dest ?>)
+set(location <?cS location ?>)
 add_subdirectory("@CMAKE_CURRENT_LIST_DIR@")
