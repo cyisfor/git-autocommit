@@ -75,5 +75,5 @@ target_link_libraries(autocommit PUBLIC
   ${CMAKE_DL_LIBS})
 target_include_directories(autocommit PUBLIC "${CMAKE_CURRENT_BINARY_DIR}")
 target_compile_definitions(autocommit PUBLIC
-  "BINARY_DIR=${CMAKE_CURRENT_BINARY_DIR}"
-  "SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}")
+  "BINARY_DIR=\"${CMAKE_CURRENT_BINARY_DIR}\""
+  "SOURCE_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}\"")

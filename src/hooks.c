@@ -210,10 +210,21 @@ void hooks_init(struct event_base* eventbase) {
 	ensure0(chdir(git_repository_path(repo)));
 	mkdir("hooks",0755);
 	ensure0(chdir("hooks"));
-	setenv("LD_LIBRARY_PATH",".",1);
-	char buf[PATH_MAX];
-	load(LITLEN("pre-commit"));
-	load(LITLEN("post-commit"));
+	bstring ldpath = {};
+	const char* val = getenv("LD_LIBRARY_PATH");
+	if(val) {
+		straddn(&ldpath, val, strlen(val));
+		stradd(&ldpath, ":");
+	}
+	stradd(&ldpath, BINARY_DIR);
+	stradd(&ldpath, ":");
+	string location = {ldpath.base + ldpath.len, 0}; /* XXX: magic */
+	location.len = strlen(getcwd(strreserve(&ldpath, PATH_MAX), PATH_MAX));
+	ldpath.len += location.len;
+	stradd(ldpath, "\0");
+	setenv("LD_LIBRARY_PATH", ldpath.base, 1);
+	load(location, LITSTR("pre-commit"));
+	load(location, LITSTR("post-commit"));
 	ensure0(chdir(git_repository_workdir(repo)));
 	checkpid_init(eventbase);
 }
