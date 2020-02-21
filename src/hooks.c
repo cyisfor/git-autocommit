@@ -43,6 +43,8 @@ struct module {
 	string name;
 	bstring src;
 	bstring dest;
+	struct stat srcstat;
+	struct stat deststat;
 	bool islib;
 	bstring path;
 };
@@ -66,22 +68,23 @@ static void load(const string location, struct modules modules, const string pro
 	for(i=0;i<modules.len;++i) {
 		struct module* mod = modules.D + i;
 		const char* zname = ZSTR(mod->name);
-		struct stat sostat, cstat;
-		if(0 == stat(zname,&sostat)) {
+		if(0 == stat(zname,&mod->deststat)) {
 			mod->islib = false;
 			ensure0(realpath(zname,strreserve(&mod->path, PATH_MAX)));
 			mod->path.len = strlen(mod->path.base);
 			*(strreserve(&mod->path, 1)) = '\0';
 		} else {
 			straddn(&mod->src, STRANDLEN(mod->name));
-			stradd(&mod->src, ".c\0");
-			if(0 != stat(mod->src.base, &cstat)) {
+			stradd(&mod->src, ".c");
+			*(strreserve(&mod->src, 1)) = '\0';
+			if(0 != stat(mod->src.base, &mod->srcstat)) {
 				// no hook for this name exists
 				continue;
 			}
 			--mod->src.len; /* no \0 in our CMakeLists.txt plz */
 			straddn(&mod->dest, STRANDLEN(mod->name));
 			stradd(&mod->dest, ".so");
+			*(strreserve(&mod->dest, 1)) = '\0';
 
 			mod->islib = true;
 		}	
@@ -126,7 +129,23 @@ static void load(const string location, struct modules modules, const string pro
 		ensure(WIFEXITED(status));
 		ensure_eq(0, WEXITSTATUS(status));
 	}
-	build_modules();
+	/* should we build every time, or only when they fail to load?
+	   If the source updates, and the module's compiled, this needs to run.
+	   So either we check the mtimes ourselves or...
+	   build_modules();
+	*/
+	for(i=0;i<modules.len;++i) {
+		struct module* mod = modules.D + i;
+		if(!mod->islib) continue;
+		if(0 != stat(mod->dest.base, &mod->deststat)) {
+			continue;
+		}
+		if(mod->srcstat.st_mtime < mod->deststat.st_mtime) continue;
+		if(mod->srcstat.st_mtime == mod->deststat.st_mtime &&
+		   mod->srcstat.st_mtim.tv_nsec < mod->deststat.st_mtim.tv_nsec) continue;
+		build_modules();
+		break;
+	}
 
 	hooks.D = calloc(1, sizeof(struct hook)*modules.len);
 	hooks.len = 0;
