@@ -5,6 +5,8 @@
 #include "check.h"
 #include "eventbase.h"
 
+#include "record.h"
+
 #include <event2/bufferevent.h>
 #include <event2/buffer.h>
 
@@ -85,7 +87,7 @@ void onsig(int signal) {
 
 
 static
-int sock = -1;
+int g_sock = -1;
 
 static
 struct bufferevent* conn = NULL;
@@ -105,9 +107,13 @@ bool reconnecting = true;
 
 static
 void kill_remote(struct bufferevent* conn) {
-	printf("Killing remote... %d\n", net_pid(sock));
+	int pid = net_pid(g_sock);
+	if(!pid) {
+		record(ERROR, "No PID for socket %d...", g_sock);
+	}
+	printf("Killing remote... %d\n", pid);
 	reconnecting = false;
-	kill(net_pid(sock),SIGTERM);
+	kill(pid,SIGTERM);
 	bufferevent_free(conn);
 }
 
@@ -147,7 +153,7 @@ void get_reply(struct bufferevent *conn, void *ctx) {
 
 		printf("Server Info: pid %d (%d)\n"
 					 "Lines %lu Words %lu Characters %lu\n",
-					 im.pid, net_pid(sock),
+					 im.pid, net_pid(g_sock),
 					 im.lines, im.words, im.characters);
 		if(im.next_commit) {
 			printf(
@@ -169,15 +175,12 @@ void get_reply(struct bufferevent *conn, void *ctx) {
 	char res;
 	int n = evbuffer_remove(input, &res, 1);
 	assert(n == 1);
-	switch(res) {
-	case 0:
+	if(res == op) {
 		// success
 		bufferevent_free(conn);
-		break;
-	default:
-		printf("Got weirdness %d\n",res);
-		abort();
-	};
+	} else {
+		record(ERROR, "Got weirdness %d != %d\n",res, op);
+	}
 }
 
 jmp_buf start_watcher;
@@ -186,7 +189,7 @@ static
 void try_connect(evutil_socket_t, short, void *);
 
 static
-void reconnect(struct event_base* eventbase, int sock);
+void reconnect(struct event_base* eventbase);
 
 void spawn_server(struct event_base* eventbase) {
 	if(++tries > 3) {
@@ -205,10 +208,10 @@ void spawn_server(struct event_base* eventbase) {
 		exit(1);
 	}
 	// try to bind
-	sock = net_bind();
-	if(sock <= 0) return; // already bound, server is go
+	g_sock = net_bind();
+	if(g_sock <= 0) return; // already bound, server is go
 
-	printf("Got bound socket %d. Starting server...\n",sock);
+	printf("Got bound socket %d. Starting server...\n",g_sock);
 
 	/*
 		1) fork(), parent is the client. child...
@@ -218,7 +221,6 @@ void spawn_server(struct event_base* eventbase) {
 	// do not unblock signals, since we're also duping our signalfd.
 	int server_pid = fork();
 	if(server_pid == 0) {
-		event_reinit(eventbase);
 		setsid();
 
 /*				dup2(sock,3);
@@ -226,7 +228,7 @@ void spawn_server(struct event_base* eventbase) {
 
 		// emacs tries to trap you by opening a secret unused pipe
 		int i;
-		for(i=sock+1;i < sock+10; ++i) {
+		for(i=g_sock+1;i < g_sock+10; ++i) {
 			close(i);
 		}
 
@@ -249,7 +251,7 @@ void spawn_server(struct event_base* eventbase) {
 			event_reinit(eventbase);
 			evtimer_del(trying);
 			// call check_init directly, instead of wasting time with execve
-			check_init(eventbase, sock);
+			check_init(eventbase, g_sock);
 			puts("server intialized.");
 
 			reconnecting = false;
@@ -259,7 +261,7 @@ void spawn_server(struct event_base* eventbase) {
 			// forget about longjmp that's just for the watcher process
 			return;
 		}
-		close(sock);
+		close(g_sock);
 		longjmp(start_watcher, watcher);
 		abort();
 	}
@@ -268,13 +270,14 @@ void spawn_server(struct event_base* eventbase) {
 	printf("started server %d. We client now.\n",server_pid);
 	net_forkhack(server_pid);
 	//usleep(100000); // XXX: mysterious race condition... activity on the client's sockets created AFTER the server is forked, are reported to the server process?
-	return reconnect(eventbase, sock); // we should be able to connect right away since listen() already called
+	return reconnect(eventbase); // we should be able to connect right away since listen() already called
 }
 
 static
 void try_connect(evutil_socket_t nothing, short nothing2, void * udata) {
 	struct event_base* eventbase = (struct event_base*)udata;
-	return reconnect(eventbase, net_connect());
+	g_sock = net_connect();
+	return reconnect(eventbase);
 }
 
 static
@@ -287,8 +290,8 @@ void wrote_response(struct bufferevent* conn, void* udata) {
 }
 
 static
-void reconnect(struct event_base* eventbase, int sock) {
-	if(sock == -1) {
+void reconnect(struct event_base* eventbase) {
+	if(g_sock == -1) {
 		return spawn_server(eventbase);
 	}
 
@@ -296,7 +299,7 @@ void reconnect(struct event_base* eventbase, int sock) {
 		puts("Stopping bad client");
 		bufferevent_free(conn);
 	}
-	conn = bufferevent_socket_new(eventbase, sock, BEV_OPT_CLOSE_ON_FREE);
+	conn = bufferevent_socket_new(eventbase, g_sock, BEV_OPT_CLOSE_ON_FREE);
 	
 	if(conn) {
 		const struct timeval timeout = {
@@ -310,12 +313,12 @@ void reconnect(struct event_base* eventbase, int sock) {
 		bufferevent_enable(conn, EV_WRITE);
 		reconnecting = false;
 	} else {
-		perror("um");
-		int pid = net_pid(sock);
+		int pid = net_pid(g_sock);
 		if(pid > 0) {
 			kill(pid,SIGTERM);
 		}
-		close(sock);
+		close(g_sock);
+		g_sock = -1;
 		// try again later, I guess...
 		evtimer_add(trying, &trying_timeout);
 	}

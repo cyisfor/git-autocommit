@@ -49,6 +49,7 @@ int net_connect(void) {
 		err(errno,"connect failed");
 	}
 	fcntl(sock,F_SETFL,fcntl(sock,F_GETFL) | O_NONBLOCK);
+	//record(INFO, "New socket %d", sock);
 	return sock;
 }
 
@@ -59,8 +60,11 @@ static void getcred(int sock) {
 	if(gotcred) return;
 	int len = sizeof(ucred);
 	int res = getsockopt(sock, SOL_SOCKET, SO_PEERCRED, &ucred, &len);
-	if(res) {
+	if(res == 0) {
 		gotcred = true;
+	} else if(res < 0) {
+		perror("getcred");
+		abort();
 	}
 }
 
@@ -72,6 +76,7 @@ static void getcred(int sock) {
 
 static pid_t forkhack = -1;
 void net_forkhack(pid_t pid) {
+	assert(pid);
 	forkhack = pid;
 }
 

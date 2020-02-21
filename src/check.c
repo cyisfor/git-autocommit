@@ -99,7 +99,7 @@ static void on_read(struct bufferevent* conn, void* udata) {
 	bufferevent_enable(conn, EV_WRITE);
 	// now read all the messages we see.
 	while(avail > 0) {
-		enum operations op;
+		enum operations op = OP_QUIT;
 		evbuffer_remove(input, &op, 1);
 		--avail;
 		switch(op) {
