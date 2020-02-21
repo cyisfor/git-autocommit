@@ -37,6 +37,12 @@ if(COMPILING_MODULE)
 
   # install(TARGETS "$ENV{name}" RUNTIME_DESTINATION "$ENV{dstloc}")
 else()
+    add_module(ctemplate
+	GIT v1
+	file://$ENV{HOME}/code/ctemplate
+	file://$ENV{HOME}/repo/ctemplate
+	git@github.com:cyisfor/ctemplate.git
+	https://github.com/cyisfor/ctemplate.git)
   add_library(autocommit SHARED
   	src/activity.c
 	src/check.c
@@ -54,13 +60,10 @@ else()
   target_link_libraries(autocommit_client PRIVATE autocommit)
   target_link_libraries(autocommit_server PRIVATE autocommit)
   configure_file(make_module.cmake.in make_module.cmake)
-  add_module(ctemplate
-	GIT v1
-	file://$ENV{HOME}/code/ctemplate
-	file://$ENV{HOME}/repo/ctemplate
-	git@github.com:cyisfor/ctemplate.git
-	https://github.com/cyisfor/ctemplate.git)
-  add_ctemplate(make_module.cmake)
+  add_ctemplate(make_module
+	"${CMAKE_CURRENT_BINARY_DIR}/make_module.cmake"
+	"make_module.cmake.snippet.c")
+  add_dependencies(autocommit make_module)
 endif()
 
 target_link_libraries(autocommit PUBLIC
