@@ -15,12 +15,12 @@ pkg_check_modules(GIT
 if(COMPILING_MODULE)
   add_library(autocommit SHARED IMPORTED)
   # cmake gets bitchy about building projects outside the binary directory
-  file(REMOVE "module_dest")
-  file(CREATE_LINK "$ENV{location}" "module_location")
-
-  add_library("$ENV{name}" MODULE "module_location/$ENV{src}")
-  target_link_libraries("$ENV{name}" PUBLIC autocommit)
-  set_property(TARGET "$ENV{name}" PROPERTY OUTPUT_NAME "module_location/$ENV{dst}")
+  file(REMOVE "module_location")
+  file(CREATE_LINK "${location}" "module_location")
+  # XXX: doesn't it get bitchy about compiling source files that aren't generated in the binary dir?
+  add_library("${name}" MODULE "module_location/${src}")
+  target_link_libraries("${name}" PUBLIC autocommit)
+  set_property(TARGET "${name}" PROPERTY OUTPUT_NAME "module_location/${dst}")
   set(CMAKE_SHARED_MODULE_PREFIX "")
   set(CMAKE_SHARED_MODULE_SUFFIX "")
 
@@ -51,8 +51,6 @@ target_link_libraries(autocommit PUBLIC
   pthread
   ${CMAKE_DL_LIBS})
 target_include_directories(autocommit PUBLIC "${CMAKE_CURRENT_BINARY_DIR}")
-target_compile_options(autocommit PUBLIC -fPIC)
-target_link_options(autocommit PUBLIC -fPIC)
 target_compile_definitions(autocommit PUBLIC
   "BINARY_DIR=${CMAKE_CURRENT_BINARY_DIR}"
   "SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}")
