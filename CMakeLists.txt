@@ -12,7 +12,20 @@ pkg_check_modules(GIT
   REQUIRED IMPORTED_TARGET
   libgit2)
 
-if("${CMAKE_BINARY_DIR}" STREQUAL "${CMAKE_CURRENT_BINARY_DIR}")
+if(COMPILING_MODULE)
+  add_library(autocommit SHARED IMPORTED)
+  # cmake gets bitchy about building projects outside the binary directory
+  file(REMOVE "module_dest")
+  file(CREATE_LINK "$ENV{location}" "module_location")
+
+  add_library("$ENV{name}" MODULE "module_location/$ENV{src}")
+  target_link_libraries("$ENV{name}" PUBLIC autocommit)
+  set_property(TARGET "$ENV{name}" PROPERTY OUTPUT_NAME "module_location/$ENV{dst}")
+  set(CMAKE_SHARED_MODULE_PREFIX "")
+  set(CMAKE_SHARED_MODULE_SUFFIX "")
+
+  # install(TARGETS "$ENV{name}" RUNTIME_DESTINATION "$ENV{dstloc}")
+else()
   add_library(autocommit SHARED
   	src/activity.c
 	src/check.c
@@ -29,15 +42,6 @@ if("${CMAKE_BINARY_DIR}" STREQUAL "${CMAKE_CURRENT_BINARY_DIR}")
 	src/server.c)
   target_link_libraries(autocommit_client PRIVATE autocommit)
   target_link_libraries(autocommit_server PRIVATE autocommit)
-else()
-  add_library(autocommit SHARED IMPORTED)
-  add_library("$ENV{name}" MODULE "$ENV{src}")
-  target_link_libraries("$ENV{name}" PUBLIC autocommit)
-  set_property(TARGET "$ENV{name}" PROPERTY OUTPUT_NAME "$ENV{dst}")
-  set(CMAKE_SHARED_MODULE_PREFIX "")
-  set(CMAKE_SHARED_MODULE_SUFFIX ".so")
-
-  install(TARGETS "$ENV{name}" RUNTIME_DESTINATION "$ENV{dstloc}")
 endif()
 
 target_link_libraries(autocommit PUBLIC
