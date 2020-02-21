@@ -86,7 +86,9 @@ static void load(const string location, const string name) {
 		ensure0(rename(".temp.cmake", "CMakeLists.txt"));
 		int pid = fork();
 		if(pid == 0) {
-			execlp("cmake", "cmake", "-G", "Ninja", ".", NULL);
+			mkdir("build", 0755);
+			ensure0(chdir("build"));
+			execlp("cmake", "cmake", "-G", "Ninja", "..", NULL);
 			abort();
 		}
 		int status = 0;
