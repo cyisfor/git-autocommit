@@ -1,5 +1,6 @@
 #define _GNU_SOURCE 			/* dlmopen */
 #include "mystring.h"
+#include "ensure.h"
 
 #include "eventbase.h"
 #include "ensure.h"
@@ -59,18 +60,18 @@ static void load(const string location, const string name) {
 	zname = NULL;
 
 	bstring src = {};
-	addstrn(&src, STRANDLEN(name));
-	addstr(&src, ".c\0");
+	straddn(&src, STRANDLEN(name));
+	stradd(&src, ".c\0");
 
 	
-	if(0 != stat(ZSTR(src), &cstat)) {
+	if(0 != stat(ZSTR(STRING(src)), &cstat)) {
 		return;
 		// no hook for this name exists
 	}
 	ZSTR_done();
 	bstring dest = {};
-	addstrn(&dest, STRANDLEN(name));
-	addstr(&dest, ".so");
+	straddn(&dest, STRANDLEN(name));
+	stradd(&dest, ".so");
 
 	void build_so() {
 		// todo: reinitialize if the source changes...
@@ -97,7 +98,7 @@ static void load(const string location, const string name) {
 			execlp("ninja", "ninja", NULL);
 			abort();
 		}
-		int status = 0;
+		status = 0;
 		waitpid(pid, &status, 0);
 		ensure(WIFEXITED(status));
 		ensure_eq(0, WEXITSTATUS(status));
@@ -105,13 +106,13 @@ static void load(const string location, const string name) {
 	
 	void load_so2(bool tried) {
 		void* dll = dlmopen(LM_ID_NEWLM,
-							so,
+							ZSTR(STRING(dest)),
 							RTLD_NOW | 
 							RTLD_LOCAL);
 		if(!dll) {
 			if(tried) {
-				fputs(stderr, dlerror());
-				fputc(stderr, '\n');
+				fputs(dlerror(), stderr);
+				fputc('\n', stderr);
 				abort();
 			}
 			build_so();
@@ -137,20 +138,7 @@ static void load(const string location, const string name) {
 		load_so2(false);
 	}
 
-	if(0 == stat(csource,&cstat)) {
-		if(0 == stat(so,&sostat)) {
-			if(sostat.st_mtime < cstat.st_mtime) {
-				build_so();
-			}
-		} else {
-			build_so();
-		}
-		return load_so();
-	} else if(0 == stat(so,&sostat)) {
-		return load_so();
-	} else {
-	}
-	abort(); // nuever 
+	return load_so();
 }
 
 void hook_run(struct event_base* eventbase, const string name, struct continuation after) {
@@ -219,13 +207,13 @@ void hook_run(struct event_base* eventbase, const string name, struct continuati
 }
 
 void hooks_init(struct event_base* eventbase) {
-	assert0(chdir(git_repository_path(repo)));
+	ensure0(chdir(git_repository_path(repo)));
 	mkdir("hooks",0755);
-	assert0(chdir("hooks"));
+	ensure0(chdir("hooks"));
 	setenv("LD_LIBRARY_PATH",".",1);
 	char buf[PATH_MAX];
 	load(LITLEN("pre-commit"));
 	load(LITLEN("post-commit"));
-	assert0(chdir(git_repository_workdir(repo)));
+	ensure0(chdir(git_repository_workdir(repo)));
 	checkpid_init(eventbase);
 }
