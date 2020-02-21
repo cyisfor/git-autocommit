@@ -24,7 +24,7 @@ add_module(cstuff
 add_cstuff()
 
 if(COMPILING_MODULE)
-  add_library(autocommit INTERFACE GLOBAL)
+  add_library(autocommit INTERFACE)
   add_library("${name}" MODULE "${location}/${src}")
   target_link_libraries("${name}" PUBLIC autocommit)
 
@@ -36,6 +36,9 @@ if(COMPILING_MODULE)
   set(CMAKE_SHARED_MODULE_PREFIX "")
   set(CMAKE_SHARED_MODULE_SUFFIX "")
   install(TARGETS "${name}" DESTINATION "${location}")
+  target_include_directories("${name}" PUBLIC "${CMAKE_CURRENT_BINARY_DIR}")
+  target_include_directories("${name}" PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src")
+  set(derp INTERFACE)
 else()
   add_module(ctemplate
 	GIT v1
@@ -75,14 +78,15 @@ else()
 
   target_compile_options(autocommit PUBLIC -fPIC)
   target_link_options(autocommit PUBLIC -fPIC)
+  target_include_directories(autocommit PUBLIC "${CMAKE_CURRENT_BINARY_DIR}")
+  target_include_directories(autocommit PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src")
+  set(derp PUBLIC)
 endif()
 
-target_link_libraries(autocommit PUBLIC
+target_link_libraries(autocommit ${derp}
   cstuff
   PkgConfig::GPGME
   PkgConfig::EVENT
   PkgConfig::GIT
   pthread
   ${CMAKE_DL_LIBS})
-target_include_directories(autocommit PUBLIC "${CMAKE_CURRENT_BINARY_DIR}")
-target_include_directories(autocommit PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src")

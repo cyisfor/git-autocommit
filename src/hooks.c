@@ -98,7 +98,7 @@ static void load(const string location, const string name) {
 
 		pid = fork();
 		if(pid == 0) {
-			execlp("ninja", "ninja", "install", NULL);
+			execlp("ninja", "ninja", "-C", "build", "install", NULL);
 			abort();
 		}
 		status = 0;
@@ -108,7 +108,7 @@ static void load(const string location, const string name) {
 	}
 	
 	void load_so2(bool tried) {
-		void* dll = dlmopen(LM_ID_NEWLM,
+		void* dll = dlopen(
 							ZSTR(STRING(dest)),
 							RTLD_NOW | 
 							RTLD_LOCAL);
