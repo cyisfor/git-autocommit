@@ -11,7 +11,7 @@
 #include <sys/mman.h> // mmap for shared semaphore
 
 #include <semaphore.h>
-#include <dl.h> // dlopen, dlsym
+#include <dlfcn.h> // dlopen, dlsym
 #include <unistd.h> // fork, exec*
 #include <stdarg.h> // va_*
 #include <stdio.h>
@@ -44,28 +44,30 @@ static void load(const string location, const string name) {
 			hooks = realloc(hooks,sizeof(struct hook) * (nhooks+1));
 			hook = hooks + nhooks;
 			++nhooks;
-			hook->name.base = malloc(nlen); // sigh
-			memcpy(hook->name.base,name,nlen);
-			hook->name.len = nlen;
+			hook->name = name;
 			hook->islib = true; // eh
 	}
+	struct stat cstat, sostat;
 
-	if(0 == stat(ZSTR(name),&sostat)) {
+	const char* zname = ZSTR(name);
+	if(0 == stat(zname,&sostat)) {
 		init_hook();
 		hook->islib = false;
-		assert(realpath(name,hook->u.path));
+		assert(realpath(zname,hook->u.path));
 		return;
 	}
+	zname = NULL;
 
 	bstring src = {};
 	addstrn(&src, STRANDLEN(name));
 	addstr(&src, ".c\0");
 
-	if(0 != stat(ZSTR(src), &sostat)) {
+	
+	if(0 != stat(ZSTR(src), &cstat)) {
 		return;
 		// no hook for this name exists
 	}
-	
+	ZSTR_done();
 	bstring dest = {};
 	addstrn(&dest, STRANDLEN(name));
 	addstr(&dest, ".so");
@@ -124,7 +126,8 @@ static void load(const string location, const string name) {
 		}
 		hook->u.run.f = (runner) dlsym(dll,"run");
 		if(hook->u.run.f == NULL) {
-			fprintf(stderr, "your hook %.*s needs a run function.", (int)nlen, name);
+			fprintf(stderr, "your hook %.*s needs a run function.",
+					STRING_FOR_PRINTF(name));
 		}
 		hook->islib = true;
 		return;
@@ -134,7 +137,6 @@ static void load(const string location, const string name) {
 		load_so2(false);
 	}
 
-	struct stat cstat, sostat;
 	if(0 == stat(csource,&cstat)) {
 		if(0 == stat(so,&sostat)) {
 			if(sostat.st_mtime < cstat.st_mtime) {
@@ -151,11 +153,11 @@ static void load(const string location, const string name) {
 	abort(); // nuever 
 }
 
-void hook_run(struct event_base* eventbase, const char* name, const size_t nlen, struct continuation after) {
+void hook_run(struct event_base* eventbase, const string name, struct continuation after) {
 	size_t i = 0;
 	for(;i<nhooks;++i) {
-		if(hooks[i].name.len == nlen &&
-			 0==memcmp(hooks[i].name.base,name,nlen)) {
+		if(hooks[i].name.len == name.len &&
+			 0==memcmp(hooks[i].name.base,name.base,name.len)) {
 			break;
 		}
 	}
