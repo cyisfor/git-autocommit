@@ -82,10 +82,9 @@ static void load(const char* name, size_t nlen) {
 			setenv("CC","cc",0);
 			setenv("src",csource,1);
 			setenv("dst",so,1);
-			setenv("CFLAGS",MY_CFLAGS,1); // def this
-			ensure0(system("exec ${LIBTOOL} --mode=compile --tag=CC ${CC} -ggdb -shared -fPIC ${CFLAGS} -c -o ${src}.lo ${src}"));
-			setenv("LDFLAGS",MY_LDFLAGS,1); // def this
-			int res = system("exec ${LIBTOOL} --mode=link --tag=CC ${CC} -ggdb -shared -fPIC ${CFLAGS} -rpath `pwd` -o ${dst} ${src}.lo ${LDFLAGS}");
+			setenv("CFLAGS",MY_CFLAGS,0); // def this
+			setenv("LDFLAGS",MY_LDFLAGS,0); // def this
+			int res = system("exec ${LIBTOOL} --mode=link --tag=CC ${CC} -ggdb -shared -fPIC ${CFLAGS} ${LDFLAGS} -c -o ${src}.la ${src} ${LDLIBS}");
 			if(res == 0) {
 				puts("yay, compiled!");
 			} else {
@@ -124,6 +123,7 @@ static void load(const char* name, size_t nlen) {
 				abort();
 			}
 			lt_dladvise_destroy(&advice);
+			build_so();
 			return load_so2(true);
 		}
 		lt_dladvise_destroy(&advice);
@@ -137,7 +137,7 @@ static void load(const char* name, size_t nlen) {
 		}
 		hook->u.run.f = (runner) lt_dlsym(dll,"run");
 		if(hook->u.run.f == NULL) {
-			puts("no run...");
+			fprintf(stderr, "your hook %.*s needs a run function.", (int)nlen, name);
 		}
 		hook->islib = true;
 		return;
