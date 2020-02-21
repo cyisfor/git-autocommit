@@ -11,7 +11,8 @@ set(location <?cS location ?>)
 <?C { int i; for(i=0;i<modules.len;++i) {
     const struct module* mod = modules.D + i;
 	if(!mod->islib) continue;
-  ?>compile_module(
+  ?>
+  compile_module(
 	"<?cS mod->name ?>"
 	"<?cS mod->src ?>"
 	"<?cS mod->dest ?>")<?C

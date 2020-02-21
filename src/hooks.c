@@ -86,8 +86,9 @@ static void load(const string location, struct modules modules, const string pro
 			mod->islib = true;
 		}	
 		if(curmod  != i) {
-			modules.D[++curmod - 1] = *mod;
+			modules.D[curmod] = *mod;
 		}
+		++curmod;
 	}
 	ZSTR_done();
 	modules.len = curmod;
