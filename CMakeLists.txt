@@ -24,7 +24,7 @@ add_module(cstuff
 add_cstuff()
 
 if(COMPILING_MODULE)
-  add_library(autocommit INTERFACE GLOBAL)  
+  add_library(autocommit INTERFACE GLOBAL)
   add_library("${name}" MODULE "${location}/${src}")
   target_link_libraries("${name}" PUBLIC autocommit)
 
@@ -43,7 +43,7 @@ else()
 	file://$ENV{HOME}/repo/ctemplate
 	git@github.com:cyisfor/ctemplate.git
 	https://github.com/cyisfor/ctemplate.git)
-  configure_file(src/config_locations.h.in config_locations.h)  
+  configure_file(src/config_locations.h.in config_locations.h)
   add_library(autocommit SHARED
 	src/activity.c
 	src/check.c
