@@ -8,7 +8,7 @@
 #include "checkpid.h"
 
 #include <sys/wait.h> // waitpid
-#include <sys/mman.h> // mmap
+#include <sys/mman.h> // mmap for shared semaphore
 
 #include <semaphore.h>
 #include <dl.h> // dlopen, dlsym
@@ -36,68 +36,10 @@ struct hook {
 // tsearch is too opaque... can't debug problems!
 // this is a tiny array anyway
 static struct hook* hooks = NULL;
-size_t nhooks = 0;
+static size_t nhooks = 0;
 
-static
-void combine_env(const char* name, const string suffix) {
-	if(getenv(name)) {
-		bstring buf = {};
-		const string val = strlenstr(getenv(name));
-		addstrn(&buf, val.base, val.len);
-		addstr(&buf, " ");
-		addstrn(&buf, suffix.base, suffix.len);
-		addstr(&buf, "\0");
-		setenv(name, buf.base, 1);
-		strclear(&buf);
-	} else {
-		setenv(name, ZSTR(suffix), 1);
-		ZSTR_done();
-	}
-}
-
-static void load(const char* name, size_t nlen) {
-	char csource[0x100];
-	memcpy(csource,name,nlen);
-	size_t len = nlen;
-	csource[nlen] = '.';
-	csource[nlen+1] = 'c';
-	csource[nlen+2] = '\0';
-
-	char so[0x100] = "";
-	memcpy(so+5,name,nlen);
-	so[nlen+5] = '.';
-	so[nlen+6] = 's';
-	so[nlen+7] = 'o';
-	so[nlen+8] = '\0';
-
-	// todo: reinitialize if the source changes...
-
-	void build_so() {
-		int pid = fork();
-		if(pid == 0) {
-			char path[PATH_MAX];
-			
-			ensure0(chdir(BINARY_DIR));
-					
-			setenv("CFLAGS",MY_CFLAGS,0); // def this
-			setenv("LDFLAGS",MY_LDFLAGS,0); // def this
-			int res = system("exec ${LIBTOOL} --mode=link --tag=CC ${CC} -ggdb -shared -fPIC ${CFLAGS} ${LDFLAGS} -c -o ${src}.la ${src} ${LDLIBS}");
-			if(res == 0) {
-				puts("yay, compiled!");
-			} else {
-				printf("boo, compile fail %d\n",res);
-			}
-			exit(res);
-		}
-		int status = 0;
-		if(waitpid(pid, &status, 0));
-		if(!(WIFEXITED(status) && 0 == WEXITSTATUS(status))) {
-			printf("compile died with %d\n",
-				   status);
-		}
-	}
-
-	struct hook* hook = NULL;
+static void load(const string location, const string name) {
+		struct hook* hook = NULL;
 	void init_hook(void) {
 			hooks = realloc(hooks,sizeof(struct hook) * (nhooks+1));
 			hook = hooks + nhooks;
@@ -108,6 +50,57 @@ static void load(const char* name, size_t nlen) {
 			hook->islib = true; // eh
 	}
 
+	if(0 == stat(ZSTR(name),&sostat)) {
+		init_hook();
+		hook->islib = false;
+		assert(realpath(name,hook->u.path));
+		return;
+	}
+
+	bstring src = {};
+	addstrn(&src, STRANDLEN(name));
+	addstr(&src, ".c\0");
+
+	if(0 != stat(ZSTR(src), &sostat)) {
+		return;
+		// no hook for this name exists
+	}
+	
+	bstring dest = {};
+	addstrn(&dest, STRANDLEN(name));
+	addstr(&dest, ".so");
+
+	void build_so() {
+		// todo: reinitialize if the source changes...
+		FILE* out = fopen(".temp.cmake","wt");
+#define output_literal(lit) fwrite(LITLEN(lit), 1, out)
+#define output_buf(buf, len) fwrite(buf, len, 1, out)
+#include "make_module.cmake.snippet.c"
+#undef output_buf
+#undef output_literal
+		fclose(out);
+		ensure0(rename(".temp.cmake", "CMakeLists.txt"));
+		int pid = fork();
+		if(pid == 0) {
+			execlp("cmake", "cmake", "-G", "Ninja", ".", NULL);
+			abort();
+		}
+		int status = 0;
+		waitpid(pid, &status, 0);
+		ensure(WIFEXITED(status));
+		ensure_eq(0, WEXITSTATUS(status));
+
+		pid = fork();
+		if(pid == 0) {
+			execlp("ninja", "ninja", NULL);
+			abort();
+		}
+		int status = 0;
+		waitpid(pid, &status, 0);
+		ensure(WIFEXITED(status));
+		ensure_eq(0, WEXITSTATUS(status));
+	}
+	
 	void load_so2(bool tried) {
 		void* dll = dlmopen(LM_ID_NEWLM,
 							so,
@@ -154,15 +147,6 @@ static void load(const char* name, size_t nlen) {
 	} else if(0 == stat(so,&sostat)) {
 		return load_so();
 	} else {
-		if(0 == stat(name,&sostat)) {
-			init_hook();
-			hook->islib = false;
-			assert(realpath(name,hook->u.path));
-			return;
-		} else {
-			return;
-			// no hook for this name exists
-		}
 	}
 	abort(); // nuever 
 }
