@@ -1,6 +1,9 @@
 include("@CMAKE_CURRENT_LIST_FILE@")
 
 add_library("$ENV{name}" MODULE "$ENV{src}")
+target_link_libraries("$ENV{name}" PUBLIC autocommit)
 set_property(TARGET "$ENV{name}" PROPERTY OUTPUT_NAME "$ENV{dst}")
 set(CMAKE_SHARED_MODULE_PREFIX "")
 set(CMAKE_SHARED_MODULE_SUFFIX ".so")
+
+install(TARGETS "$ENV{name}" RUNTIME_DESTINATION "$ENV{dstloc}")

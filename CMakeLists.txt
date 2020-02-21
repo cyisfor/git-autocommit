@@ -27,10 +27,13 @@ target_link_libraries(autocommit PUBLIC
   PkgConfig::EVENT
   PkgConfig::GIT
   pthread
-  ltdl)
+  ${CMAKE_DL_LIBS})
 target_include_directories(autocommit PUBLIC "${CMAKE_CURRENT_BINARY_DIR}")
 target_compile_options(autocommit PUBLIC -fPIC)
 target_link_options(autocommit PUBLIC -fPIC)
+target_compile_definitions(autocommit PUBLIC
+  "BINARY_DIR=${CMAKE_CURRENT_BINARY_DIR}"
+  "SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}")
 
 add_executable(autocommit_client
   src/client.c)
@@ -39,10 +42,4 @@ add_executable(autocommit_server
 target_link_libraries(autocommit_client PRIVATE autocommit)
 target_link_libraries(autocommit_server PRIVATE autocommit)
 
-configure_file(src/my_cflags.cmake.h my_cflags.cmakesucks)
-file(GENERATE OUTPUT my_cflags.h
-  INPUT "${CMAKE_CURRENT_BINARY_DIR}/my_cflags.cmakesucks")
-
-add_custom_target(check_my_cflags
-  DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/my_cflags.h")
-add_dependencies(autocommit check_my_cflags)
+configure_file(make_module.cmake.in make_module.cmake)

@@ -83,11 +83,11 @@ static void load(const char* name, size_t nlen) {
 	csource[nlen+1] = 'c';
 	csource[nlen+2] = '\0';
 
-	char so[0x100] = "./lib";
+	char so[0x100] = "";
 	memcpy(so+5,name,nlen);
 	so[nlen+5] = '.';
-	so[nlen+6] = 'l';
-	so[nlen+7] = 'a';
+	so[nlen+6] = 's';
+	so[nlen+7] = 'o';
 	so[nlen+8] = '\0';
 
 	// todo: reinitialize if the source changes...
@@ -95,12 +95,9 @@ static void load(const char* name, size_t nlen) {
 	void build_so() {
 		int pid = fork();
 		if(pid == 0) {
-			setenv("LIBTOOL","libtool",0);
-			setenv("CC","cc",0);
-			setenv("src",csource,1);
-			setenv("dst",so,1);
-			combine_env("CFLAGS", LITSTR(MY_CFLAGS));
-			combine_env("LDFLAGS", LITSTR(MY_LDFLAGS));
+			char path[PATH_MAX];
+			
+			ensure0(chdir(BINARY_DIR));
 					
 			setenv("CFLAGS",MY_CFLAGS,0); // def this
 			setenv("LDFLAGS",MY_LDFLAGS,0); // def this
