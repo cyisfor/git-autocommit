@@ -35,11 +35,21 @@ target_compile_definitions(autocommit PUBLIC
   "BINARY_DIR=${CMAKE_CURRENT_BINARY_DIR}"
   "SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}")
 
-add_executable(autocommit_client
-  src/client.c)
-add_executable(autocommit_server
-  src/server.c)
-target_link_libraries(autocommit_client PRIVATE autocommit)
-target_link_libraries(autocommit_server PRIVATE autocommit)
+if("${CMAKE_BINARY_DIR}" STREQUAL "${CMAKE_CURRENT_BINARY_DIR}")
+  add_executable(autocommit_client
+	src/client.c)
+  add_executable(autocommit_server
+	src/server.c)
+  target_link_libraries(autocommit_client PRIVATE autocommit)
+  target_link_libraries(autocommit_server PRIVATE autocommit)
+else()
+  add_library("$ENV{name}" MODULE "$ENV{src}")
+  target_link_libraries("$ENV{name}" PUBLIC autocommit)
+  set_property(TARGET "$ENV{name}" PROPERTY OUTPUT_NAME "$ENV{dst}")
+  set(CMAKE_SHARED_MODULE_PREFIX "")
+  set(CMAKE_SHARED_MODULE_SUFFIX ".so")
 
-configure_file(make_module.cmake.in make_module.cmake)
+  install(TARGETS "$ENV{name}" RUNTIME_DESTINATION "$ENV{dstloc}")
+endif()
+
+
