@@ -58,6 +58,23 @@ struct hook {
 static struct hook* hooks = NULL;
 size_t nhooks = 0;
 
+static
+void combine_env(const char* name, const string suffix) {
+	if(getenv(name)) {
+		bstring buf = {};
+		const string val = strlenstr(getenv(name));
+		addstrn(&buf, val.base, val.len);
+		addstr(&buf, " ");
+		addstrn(&buf, suffix.base, suffix.len);
+		addstr(&buf, "\0");
+		setenv(name, buf.base, 1);
+		strclear(&buf);
+	} else {
+		setenv(name, ZSTR(suffix), 1);
+		ZSTR_done();
+	}
+}
+
 static void load(const char* name, size_t nlen) {
 	char csource[0x100];
 	memcpy(csource,name,nlen);
@@ -82,6 +99,9 @@ static void load(const char* name, size_t nlen) {
 			setenv("CC","cc",0);
 			setenv("src",csource,1);
 			setenv("dst",so,1);
+			combine_env("CFLAGS", LITSTR(MY_CFLAGS));
+			combine_env("LDFLAGS", LITSTR(MY_LDFLAGS));
+					
 			setenv("CFLAGS",MY_CFLAGS,0); // def this
 			setenv("LDFLAGS",MY_LDFLAGS,0); // def this
 			int res = system("exec ${LIBTOOL} --mode=link --tag=CC ${CC} -ggdb -shared -fPIC ${CFLAGS} ${LDFLAGS} -c -o ${src}.la ${src} ${LDLIBS}");

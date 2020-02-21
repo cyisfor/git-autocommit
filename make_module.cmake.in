@@ -1,0 +1,6 @@
+include("@CMAKE_CURRENT_LIST_FILE@")
+
+add_library("$ENV{name}" MODULE "$ENV{src}")
+set_property(TARGET "$ENV{name}" PROPERTY OUTPUT_NAME "$ENV{dst}")
+set(CMAKE_SHARED_MODULE_PREFIX "")
+set(CMAKE_SHARED_MODULE_SUFFIX ".so")
