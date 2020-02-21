@@ -105,6 +105,7 @@ static void on_read(struct bufferevent* conn, void* udata) {
 		switch(op) {
 		case OP_QUIT:
 			quitting = true;
+			record(INFO, "quitting");
 			bufferevent_write(conn, &op, 1);
 			return;
 		case OP_FORCE: {
