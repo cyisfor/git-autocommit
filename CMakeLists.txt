@@ -30,6 +30,9 @@ if(COMPILING_MODULE)
   set_property(TARGET autocommit PROPERTY includes
 	"${CMAKE_CURRENT_BINARY_DIR}"
 	"${CMAKE_CURRENT_SOURCE_DIR}/src")
+  set(CMAKE_SHARED_MODULE_PREFIX "" PARENT_SCOPE)
+  set(CMAKE_SHARED_MODULE_SUFFIX "" PARENT_SCOPE)
+  
   # make sure location is set
   function(compile_module name src dest)
 	add_library("${name}" MODULE "${location}/${src}")
@@ -39,8 +42,6 @@ if(COMPILING_MODULE)
 	get_property(rpath TARGET "${name}" PROPERTY INSTALL_RPATH)
 	list(APPEND rpath "${location}")
 	set_property(TARGET "${name}" PROPERTY INSTALL_RPATH "${rpath}")
-	set(CMAKE_SHARED_MODULE_PREFIX "")
-	set(CMAKE_SHARED_MODULE_SUFFIX "")
 	install(TARGETS "${name}" DESTINATION "${location}")
 	get_property(includes TARGET autocommit PROPERTY includes)
 	target_include_directories("${name}" PUBLIC
