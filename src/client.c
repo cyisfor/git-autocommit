@@ -137,7 +137,7 @@ void get_reply(struct bufferevent *conn, void *ctx) {
 	struct evbuffer* input = bufferevent_get_input(conn);
 	struct info_message im;
 	size_t left = evbuffer_get_length(input);		
-	if(op == INFO) {
+	if(op == OP_INFO) {
 		if(left != sizeof(struct info_message)) {
 			kill_remote(conn);
 			return;
@@ -200,8 +200,8 @@ void spawn_server(struct event_base* eventbase) {
 		}
 	}
 
-	if(op == QUIT || op == FORCE) exit(0);
-	if(op == INFO && NULL == getenv("start")) {
+	if(op == OP_QUIT || op == OP_FORCE) exit(0);
+	if(op == OP_INFO && NULL == getenv("start")) {
 		printf("Server not running.\n");
 		exit(1);
 	}
@@ -371,19 +371,19 @@ int main(int argc, char *argv[])
 	}
 
 	if(NULL != getenv("quit")) {
-		op = QUIT;
+		op = OP_QUIT;
 	} else if(NULL != getenv("check")) {
-		op = INFO;
+		op = OP_INFO;
 	} else if(NULL != getenv("force")) {
-		op = FORCE;
+		op = OP_FORCE;
 	} else {
-		op = ADD;
+		op = OP_ADD;
 	}
 
 	char* path;
 	char bigpath[PATH_MAX];
 	size_t plen;
-	if(op == ADD) {
+	if(op == OP_ADD) {
 		path = getenv("add");
 		if(path == NULL) {
 			bye("no file provided");
@@ -407,7 +407,7 @@ int main(int argc, char *argv[])
 		bye("couldn't find a git repository");
 	}
 
-	if(op == ADD) {
+	if(op == OP_ADD) {
 		// hissy fit......
 		printf("path %s\n",path);
 		plen = repo_relative(&path, plen);

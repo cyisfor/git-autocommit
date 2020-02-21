@@ -1,6 +1,7 @@
 #define _GNU_SOURCE 			/* dlmopen */
 #include "mystring.h"
 #include "ensure.h"
+#include "config_locations.h"
 
 #include "eventbase.h"
 #include "ensure.h"
@@ -221,7 +222,7 @@ void hooks_init(struct event_base* eventbase) {
 	string location = {ldpath.base + ldpath.len, 0}; /* XXX: magic */
 	location.len = strlen(getcwd(strreserve(&ldpath, PATH_MAX), PATH_MAX));
 	ldpath.len += location.len;
-	stradd(ldpath, "\0");
+	stradd(&ldpath, "\0");
 	setenv("LD_LIBRARY_PATH", ldpath.base, 1);
 	load(location, LITSTR("pre-commit"));
 	load(location, LITSTR("post-commit"));
