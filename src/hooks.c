@@ -81,7 +81,6 @@ static void load(const string location, struct modules modules, const string pro
 				// no hook for this name exists
 				continue;
 			}
-			--mod->src.len; /* no \0 in our CMakeLists.txt plz */
 			straddn(&mod->dest, STRANDLEN(mod->name));
 			stradd(&mod->dest, ".so");
 			*(strreserve(&mod->dest, 1)) = '\0';
