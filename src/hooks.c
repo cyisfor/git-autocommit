@@ -64,11 +64,11 @@ static void load(const string location, const string name) {
 	straddn(&src, STRANDLEN(name));
 	stradd(&src, ".c\0");
 
-	
-	if(0 != stat(ZSTR(STRING(src)), &cstat)) {
+	if(0 != stat(src.base, &cstat)) {
 		return;
 		// no hook for this name exists
 	}
+	--src.len; 					/* no \0 in our CMakeLists.txt plz */
 	ZSTR_done();
 	bstring dest = {};
 	straddn(&dest, STRANDLEN(name));
@@ -96,7 +96,7 @@ static void load(const string location, const string name) {
 
 		pid = fork();
 		if(pid == 0) {
-			execlp("ninja", "ninja", NULL);
+			execlp("ninja", "ninja", "install", NULL);
 			abort();
 		}
 		status = 0;
@@ -211,21 +211,14 @@ void hooks_init(struct event_base* eventbase) {
 	ensure0(chdir(git_repository_path(repo)));
 	mkdir("hooks",0755);
 	ensure0(chdir("hooks"));
-	bstring ldpath = {};
-	const char* val = getenv("LD_LIBRARY_PATH");
-	if(val) {
-		straddn(&ldpath, val, strlen(val));
-		stradd(&ldpath, ":");
-	}
-	stradd(&ldpath, BINARY_DIR);
-	stradd(&ldpath, ":");
-	string location = {ldpath.base + ldpath.len, 0}; /* XXX: magic */
-	location.len = strlen(getcwd(strreserve(&ldpath, PATH_MAX), PATH_MAX));
-	ldpath.len += location.len;
-	stradd(&ldpath, "\0");
-	setenv("LD_LIBRARY_PATH", ldpath.base, 1);
-	load(location, LITSTR("pre-commit"));
-	load(location, LITSTR("post-commit"));
+	bstring location = {};
+	/* note: it's useless to set LD_LIBRARY_PATH here, and ld.so has no other way for us to do
+	   so other than HURR DURR IM GOOD PROGRAMMER I MAKE THE BYTES */
+	location.len = strlen(getcwd(strreserve(&location, PATH_MAX), PATH_MAX));
+	*strreserve(&location, 1) = '\0';
+	load(STRING(location), LITSTR("pre-commit"));
+	load(STRING(location), LITSTR("post-commit"));
+	strclear(&location);
 	ensure0(chdir(git_repository_workdir(repo)));
 	checkpid_init(eventbase);
 }

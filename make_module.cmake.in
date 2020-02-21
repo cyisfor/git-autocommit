@@ -1,3 +1,5 @@
+cmake_minimum_required(VERSION 3.14)
+project("<?cS name ?>" VERSION 1.0)
 # ugggggh
 # this is a cmake configure_file script
 # for a ctemplate script
@@ -8,4 +10,4 @@ set(name <?cS name ?>)
 set(src <?cS src ?>)
 set(dst <?cS dest ?>)
 set(location <?cS location ?>)
-add_subdirectory("@CMAKE_CURRENT_LIST_DIR@")
+add_subdirectory("@CMAKE_CURRENT_LIST_DIR@" "@CMAKE_CURRENT_BINARY_DIR@")

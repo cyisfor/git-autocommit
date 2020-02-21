@@ -99,15 +99,15 @@ static void on_read(struct bufferevent* conn, void* udata) {
 	bufferevent_enable(conn, EV_WRITE);
 	// now read all the messages we see.
 	while(avail > 0) {
-		char op;
+		enum operations op;
 		evbuffer_remove(input, &op, 1);
 		--avail;
 		switch(op) {
-		case QUIT:
+		case OP_QUIT:
 			quitting = true;
 			bufferevent_write(conn, &op, 1);
 			return;
-		case FORCE: {
+		case OP_FORCE: {
 			struct commit_later_data* data = malloc(sizeof(struct commit_later_data));
 			data->conn = conn;
 			data->eventbase = eventbase;
@@ -115,7 +115,7 @@ static void on_read(struct bufferevent* conn, void* udata) {
 			bufferevent_write(conn, &op, 1);
 		}
 			break;
-		case INFO: {
+		case OP_INFO: {
 			pid_t pid = getpid();
 			struct info_message im = {
 				pid, ci.lines, ci.words, ci.characters, ci.next_commit
@@ -123,7 +123,7 @@ static void on_read(struct bufferevent* conn, void* udata) {
 			bufferevent_write(conn, &im, sizeof(im));
 		}
 		break;
-		case ADD: { 
+		case OP_ADD: { 
 			queue_commit();
 			bufferevent_write(conn, &op, 1);
 		}
@@ -421,7 +421,6 @@ static void commit_now(struct commit_later_data* data) {
 	git_status_foreach_ext(repo,&opt,check,&changes);
 	
 	if(0 == changes) {
-		#define LITLEN(s) s, (sizeof(s)-1)
 		ignore(write(1,LITLEN("no empty commits please.\n")));
 		// no empty commits, please
 		return;
