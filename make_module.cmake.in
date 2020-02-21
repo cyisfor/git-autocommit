@@ -1,13 +1,19 @@
 cmake_minimum_required(VERSION 3.14)
-project("<?cS name ?>" VERSION 1.0)
+project("<?cS project ?>" VERSION 1.0)
 # ugggggh
 # this is a cmake configure_file script
 # for a ctemplate script
 # for a CMakeLists.txt file
 # THREE LANGUAGES IN ONE FILE
 set(COMPILING_MODULE ON)
-set(name <?cS name ?>)
-set(src <?cS src ?>)
-set(dst <?cS dest ?>)
-set(location <?cS location ?>)
 add_subdirectory("@CMAKE_CURRENT_LIST_DIR@" "@CMAKE_CURRENT_BINARY_DIR@")
+set(location <?cS location ?>)
+<?C { int i; for(i=0;i<modules.len;++i) {
+    const struct module* mod = modules.D + i;
+	if(!mod->islib) continue;
+  ?>compile_module(
+	"<?cS mod->name ?>"
+	"<?cS mod->src ?>"
+	"<?cS mod->dest ?>")<?C
+  } }
+  ?>

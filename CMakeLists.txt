@@ -25,19 +25,28 @@ add_cstuff()
 
 if(COMPILING_MODULE)
   add_library(autocommit INTERFACE)
-  add_library("${name}" MODULE "${location}/${src}")
-  target_link_libraries("${name}" PUBLIC autocommit)
+  # since cmake devs are dumb, you can't set target_include_directories that are public
+  # for an interface library.
+  set_property(TARGET autocommit PROPERTY includes
+	"${CMAKE_CURRENT_BINARY_DIR}"
+	"${CMAKE_CURRENT_SOURCE_DIR}/src")
+  # make sure location is set
+  function(compile_module name src dest)
+	add_library("${name}" MODULE "${location}/${src}")
+	target_link_libraries("${name}" PUBLIC autocommit)
 
-  set_property(TARGET "${name}" PROPERTY OUTPUT_NAME "${dst}")
-  get_property(rpath TARGET "${name}" PROPERTY INSTALL_RPATH)
-  list(APPEND rpath "${CMAKE_CURRENT_BINARY_DIR}")
-  list(APPEND rpath "${location}")
-  set_property(TARGET "${name}" PROPERTY INSTALL_RPATH "${rpath}")
-  set(CMAKE_SHARED_MODULE_PREFIX "")
-  set(CMAKE_SHARED_MODULE_SUFFIX "")
-  install(TARGETS "${name}" DESTINATION "${location}")
-  target_include_directories("${name}" PUBLIC "${CMAKE_CURRENT_BINARY_DIR}")
-  target_include_directories("${name}" PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src")
+	set_property(TARGET "${name}" PROPERTY OUTPUT_NAME "${dest}")
+	get_property(rpath TARGET "${name}" PROPERTY INSTALL_RPATH)
+	list(APPEND rpath "${location}")
+	set_property(TARGET "${name}" PROPERTY INSTALL_RPATH "${rpath}")
+	set(CMAKE_SHARED_MODULE_PREFIX "")
+	set(CMAKE_SHARED_MODULE_SUFFIX "")
+	install(TARGETS "${name}" DESTINATION "${location}")
+	get_property(includes TARGET autocommit PROPERTY includes)
+	target_include_directories("${name}" PUBLIC
+	  ${includes})
+	  
+  endfunction(compile_module)
   set(derp INTERFACE)
 else()
   add_module(ctemplate
@@ -57,9 +66,6 @@ else()
 	src/eventbase.c
 	src/continuation.c
 	src/note.c)
-  get_property(rpath TARGET autocommit PROPERTY BUILD_RPATH)
-  list(APPEND rpath "${CMAKE_CURRENT_BINARY_DIR}")
-  set_property(TARGET autocommit PROPERTY BUILD_RPATH "${rpath}")
   configure_file(make_module.cmake.in make_module.cmake)
   add_ctemplate(make_module
 	"${CMAKE_CURRENT_BINARY_DIR}/make_module.cmake"

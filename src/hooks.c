@@ -31,52 +31,71 @@ struct hook {
 			runner f;
 			void* data;
 		} run;
-		char path[PATH_MAX];
+		bstring path;
 	} u;
 };
 
 // tsearch is too opaque... can't debug problems!
 // this is a tiny array anyway
-static struct hook* hooks = NULL;
-static size_t nhooks = 0;
 
-static void load(const string location, const string name) {
-		struct hook* hook = NULL;
-	void init_hook(void) {
-			hooks = realloc(hooks,sizeof(struct hook) * (nhooks+1));
-			hook = hooks + nhooks;
-			++nhooks;
-			hook->name = name;
-			hook->islib = true; // eh
+/* be SURE to zero this */
+struct module {
+	string name;
+	bstring src;
+	bstring dest;
+	bool islib;
+	bstring path;
+};
+
+struct modules {
+	struct module* D;
+	size_t len;
+};	
+
+struct hooks {
+	struct hook* D;
+	size_t len;
+} hooks = {};
+
+static void load(const string location, struct modules modules, const string project) {
+	if(modules.len == 0) return;
+	assert(hooks.D == NULL);
+	/* first, set up the variables, clean out the nonexistent modules */
+	int i;
+	int curmod = 0;
+	for(i=0;i<modules.len;++i) {
+		struct module* mod = modules.D + i;
+		const char* zname = ZSTR(mod->name);
+		struct stat sostat, cstat;
+		if(0 == stat(zname,&sostat)) {
+			mod->islib = false;
+			ensure0(realpath(zname,strreserve(&mod->path, PATH_MAX)));
+			mod->path.len = strlen(mod->path.base);
+			*(strreserve(&mod->path, 1)) = '\0';
+		} else {
+			straddn(&mod->src, STRANDLEN(mod->name));
+			stradd(&mod->src, ".c\0");
+			if(0 != stat(mod->src.base, &cstat)) {
+				// no hook for this name exists
+				continue;
+			}
+			--mod->src.len; /* no \0 in our CMakeLists.txt plz */
+			straddn(&mod->dest, STRANDLEN(mod->name));
+			stradd(&mod->dest, ".so");
+
+			mod->islib = true;
+		}	
+		if(curmod  != i) {
+			modules.D[++curmod - 1] = *mod;
+		}
 	}
-	struct stat cstat, sostat;
-
-	const char* zname = ZSTR(name);
-	if(0 == stat(zname,&sostat)) {
-		init_hook();
-		hook->islib = false;
-		assert(realpath(zname,hook->u.path));
-		return;
-	}
-	zname = NULL;
-
-	bstring src = {};
-	straddn(&src, STRANDLEN(name));
-	stradd(&src, ".c\0");
-
-	if(0 != stat(src.base, &cstat)) {
-		return;
-		// no hook for this name exists
-	}
-	--src.len; 					/* no \0 in our CMakeLists.txt plz */
 	ZSTR_done();
-	bstring dest = {};
-	straddn(&dest, STRANDLEN(name));
-	stradd(&dest, ".so");
+	modules.len = curmod;
+	if(modules.len == 0) return;
 
-	void build_so() {
+	void build_modules(void) {
 		// todo: reinitialize if the source changes...
-		FILE* out = fopen(".temp.cmake","wt");
+		FILE* out = fopen(".temp.cmake","at");
 #define output_literal(lit) fwrite(LITLEN(lit), 1, out)
 #define output_buf(buf, len) fwrite(buf, len, 1, out)
 #include "make_module.cmake.snippet.c"
@@ -106,10 +125,16 @@ static void load(const string location, const string name) {
 		ensure(WIFEXITED(status));
 		ensure_eq(0, WEXITSTATUS(status));
 	}
-	
-	void load_so2(bool tried) {
+	build_modules();
+
+	hooks.D = calloc(1, sizeof(struct hook)*modules.len);
+	hooks.len = 0;
+	struct hook* next_hook(void) {
+		return hooks.D + (++hooks.len) - 1;
+	}
+	struct hook* try_load_so(const struct module* mod, const bool tried) {
 		void* dll = dlopen(
-							ZSTR(STRING(dest)),
+							ZSTR(STRING(mod->dest)),
 							RTLD_NOW | 
 							RTLD_LOCAL);
 		if(!dll) {
@@ -118,46 +143,64 @@ static void load(const string location, const string name) {
 				fputc('\n', stderr);
 				abort();
 			}
-			build_so();
-			return load_so2(true);
+			build_modules();
+			return try_load_so(mod, true);
 		}
 
 		typedef void* (*initter)(void);
 		initter init = (initter) dlsym(dll,"init");
-		init_hook();
+		struct hook* hook = next_hook();
 		if(init) {
 			hook->u.run.data = init();
 		}
 		hook->u.run.f = (runner) dlsym(dll,"run");
 		if(hook->u.run.f == NULL) {
 			fprintf(stderr, "your hook %.*s needs a run function.",
-					STRING_FOR_PRINTF(name));
+					STRING_FOR_PRINTF(mod->name));
 		}
-		hook->islib = true;
-		return;
+		return hook;
 	}
 
-	void load_so(void) {
-		load_so2(false);
+	void load_mod(struct module* mod) {
+		struct hook* hook;
+		if(mod->islib) {
+			hook = try_load_so(mod, false);
+			hook->islib = true;
+		} else {
+			hook = next_hook();
+			hook->u.path = mod->path;
+			mod->path = (bstring){};
+			hook->islib = false;
+		}
+		hook->name = mod->name;
 	}
 
-	return load_so();
+	for(i=0;i<modules.len;++i) {
+		load_mod(modules.D + i);
+	}
+
+	hooks.D = realloc(hooks.D, sizeof(*hooks.D)*hooks.len);
+	
+	for(i=0;i<modules.len;++i) {
+		strclear(&modules.D[i].src);
+		strclear(&modules.D[i].dest);
+	}
 }
 
 void hook_run(struct event_base* eventbase, const string name, struct continuation after) {
 	size_t i = 0;
-	for(;i<nhooks;++i) {
-		if(hooks[i].name.len == name.len &&
-			 0==memcmp(hooks[i].name.base,name.base,name.len)) {
+	for(;i<hooks.len;++i) {
+		if(hooks.D[i].name.len == name.len &&
+			 0==memcmp(hooks.D[i].name.base,name.base,name.len)) {
 			break;
 		}
 	}
-	if(i == nhooks) {
+	if(i == hooks.len) {
 		// no hook
 		continuation_run(after);
 		return;
 	}
-	struct hook* hook = hooks+i;
+	struct hook* hook = hooks.D+i;
 
 	if(hook->islib) {
 		assert(hook->u.run.f); 	/* if path is filled out this will be garbage though */
@@ -185,16 +228,16 @@ void hook_run(struct event_base* eventbase, const string name, struct continuati
 				munmap(mem,sizeof(sem_t));
 			}
 			event_reinit(eventbase);
-			char* args[] = { hook->u.path, NULL };
-			execv(hook->u.path,args);
+			char* args[] = { hook->u.path.base, NULL };
+			execv(hook->u.path.base,args);
 			if(errno == ENOEXEC || errno == EACCES) {
 				perror("trying shell, since");
-				printf("hook %s\n",hook->u.path);
-				char* args[] = { "sh", hook->u.path, NULL };
+				printf("hook %.*s\n",STRING_FOR_PRINTF(hook->u.path));
+				char* args[] = { "sh", hook->u.path.base, NULL };
 				execv("/bin/sh",args);
 				perror("nope");
 			}
-			perror(hook->u.path);
+			perror(hook->u.path.base);
 			abort();
 		}
 		
@@ -209,7 +252,7 @@ void hook_run(struct event_base* eventbase, const string name, struct continuati
 	}
 }
 
-void hooks_init(struct event_base* eventbase) {
+void hooks_init(struct event_base* eventbase, const string project) {
 	ensure0(chdir(git_repository_path(repo)));
 	mkdir("hooks",0755);
 	ensure0(chdir("hooks"));
@@ -218,8 +261,18 @@ void hooks_init(struct event_base* eventbase) {
 	   so other than HURR DURR IM GOOD PROGRAMMER I MAKE THE BYTES */
 	location.len = strlen(getcwd(strreserve(&location, PATH_MAX), PATH_MAX));
 	*strreserve(&location, 1) = '\0';
-	load(STRING(location), LITSTR("pre-commit"));
-	load(STRING(location), LITSTR("post-commit"));
+	struct module modulestore[] = {
+#define ONE(lit) { .name = LITSTR(lit) }
+		ONE("pre-commit"),
+		ONE("post-commit")
+#undef ONE
+	};
+	struct modules modules = {
+		.D = modulestore,
+		.len = sizeof(modulestore)/sizeof(*modulestore)
+	};
+	load(STRING(location), modules, project);
+
 	strclear(&location);
 	ensure0(chdir(git_repository_workdir(repo)));
 	checkpid_init(eventbase);

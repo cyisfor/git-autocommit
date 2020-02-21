@@ -654,7 +654,7 @@ void check_init(struct event_base* eventbase, int sock) {
 	ci.later = evtimer_new(eventbase, (void*)commit_later, data);
 
 	activity_init(eventbase);
-	hooks_init(eventbase);
+	hooks_init(eventbase, strlenstr(git_repository_path(repo)));
 
 	struct evconnlistener* listener = evconnlistener_new(
 		eventbase,
