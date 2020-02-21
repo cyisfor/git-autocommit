@@ -129,7 +129,7 @@ static void on_read(struct bufferevent* conn, void* udata) {
 		}
 		break;
 		default:
-			errx(23,"bad message %d\n",op);
+			warnx("bad message %d\n",op);
 		};
 	}
 }

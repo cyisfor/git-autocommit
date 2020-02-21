@@ -120,7 +120,6 @@ void on_events(struct bufferevent *conn, short events, void *udata) {
 		puts("timed out... killing server.");
 		kill_remote(conn);
 	} else if(events & (BEV_EVENT_ERROR|BEV_EVENT_EOF)) {
-		puts("closing...");
 		if(reconnecting) {
 			evtimer_add(trying, &trying_timeout);
 		} else {
@@ -297,7 +296,6 @@ void reconnect(struct event_base* eventbase, int sock) {
 		puts("Stopping bad client");
 		bufferevent_free(conn);
 	}
-	puts("Starting client");
 	conn = bufferevent_socket_new(eventbase, sock, BEV_OPT_CLOSE_ON_FREE);
 	
 	if(conn) {
@@ -388,8 +386,6 @@ int main(int argc, char *argv[])
 		if(path == NULL) {
 			bye("no file provided");
 		}
-		puts("bast");
-		puts(path);
 		const char* derp = realpath(path,bigpath);
 		if(derp == NULL) {
 			printf("'%s' is not a real path\n",path);
@@ -409,7 +405,6 @@ int main(int argc, char *argv[])
 
 	if(op == OP_ADD) {
 		// hissy fit......
-		printf("path %s\n",path);
 		plen = repo_relative(&path, plen);
 		// printf("repo relative path %s\n",path);
 		repo_add(path);

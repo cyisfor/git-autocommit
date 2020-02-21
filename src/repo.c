@@ -109,7 +109,7 @@ void repo_add(const char* path) {
 	
 	// don't repo_check b/c this fails if already added
 	if(0 == git_index_add_bypath(idx, path)) {
-		printf("added path %s\n",path);
+		//printf("added path %s\n",path);
 		git_index_write(idx);
 	} else {
 		printf("error adding path %s\n",path);
