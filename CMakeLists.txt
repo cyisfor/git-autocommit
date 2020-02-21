@@ -12,6 +12,17 @@ pkg_check_modules(GIT
   REQUIRED IMPORTED_TARGET
   libgit2)
 
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/add_module")
+include(AddModule)
+add_module(cstuff
+  GIT v1
+  SIGNER 5F15F8C9C05B4D3D31EBB1C3F66D599380F88521
+  file://$ENV{HOME}/code/cstuff
+  file://$ENV{HOME}/repo/cstuff
+  git@github.com:cyisfor/cstuff.git
+  https://github.com/cyisfor/cstuff.git)
+add_cstuff()
+
 if(COMPILING_MODULE)
   add_library(autocommit SHARED IMPORTED)
   # cmake gets bitchy about building projects outside the binary directory
@@ -42,6 +53,14 @@ else()
 	src/server.c)
   target_link_libraries(autocommit_client PRIVATE autocommit)
   target_link_libraries(autocommit_server PRIVATE autocommit)
+  configure_file(make_module.cmake.in make_module.cmake)
+  add_module(ctemplate
+	GIT v1
+	file://$ENV{HOME}/code/ctemplate
+	file://$ENV{HOME}/repo/ctemplate
+	git@github.com:cyisfor/ctemplate.git
+	https://github.com/cyisfor/ctemplate.git)
+  add_ctemplate(make_module.cmake)
 endif()
 
 target_link_libraries(autocommit PUBLIC
