@@ -15,7 +15,7 @@ pkg_check_modules(GIT
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/add_module")
 include(AddModule)
 add_module(cstuff
-  GIT v1
+  GIT v4
   SIGNER 5F15F8C9C05B4D3D31EBB1C3F66D599380F88521
   file://$ENV{HOME}/code/cstuff
   file://$ENV{HOME}/repo/cstuff
@@ -51,7 +51,7 @@ if(COMPILING_MODULE)
   set(derp INTERFACE)
 else()
   add_module(ctemplate
-	GIT v1
+	GIT v3
 	file://$ENV{HOME}/code/ctemplate
 	file://$ENV{HOME}/repo/ctemplate
 	git@github.com:cyisfor/ctemplate.git
