@@ -1,8 +1,12 @@
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
+
 #include "net.h"
 #include "repo.h"
 #include "min.h"
 #include "ensure.h"
+#include "record.h"
 
 #include <sys/socket.h>
 #include <sys/un.h>
@@ -11,7 +15,7 @@
 #include <errno.h>
 #include <stdbool.h>
 #include <assert.h>
-
+#include <string.h> // memcpy
 
 // the name of the socket is \0 plus the git top directory
 static struct sockaddr_un addr = {
@@ -58,12 +62,12 @@ static bool gotcred = false;
 
 static void getcred(int sock) {
 	if(gotcred) return;
-	int len = sizeof(ucred);
+	socklen_t len = sizeof(ucred);
 	int res = getsockopt(sock, SOL_SOCKET, SO_PEERCRED, &ucred, &len);
 	if(res == 0) {
 		gotcred = true;
 	} else if(res < 0) {
-		perror("getcred");
+		record(ERROR, "getcred");
 		abort();
 	}
 }

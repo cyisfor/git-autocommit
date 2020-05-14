@@ -1,4 +1,7 @@
-#define _GNU_SOURCE 			/* dlmopen */
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE				/* dlmopen */
+#endif
+
 #include "mystring.h"
 #include "ensure.h"
 #include "config_locations.h"
@@ -70,18 +73,18 @@ static void load(const string location, struct modules modules, const string pro
 		const char* zname = ZSTR(mod->name);
 		if(0 == stat(zname,&mod->deststat)) {
 			mod->islib = false;
-			ensure0(realpath(zname,strreserve(&mod->path, PATH_MAX)));
-			mod->path.len = strlen(mod->path.base);
+			ensure0(realpath(zname,(char*)strreserve(&mod->path, PATH_MAX)));
+			mod->path.len = strlen((const char*)mod->path.base);
 			*(strreserve(&mod->path, 1)) = '\0';
 		} else {
-			straddn(&mod->src, STRANDLEN(mod->name));
+			straddstr(&mod->src, mod->name);
 			stradd(&mod->src, ".c");
 			*(strreserve(&mod->src, 1)) = '\0';
-			if(0 != stat(mod->src.base, &mod->srcstat)) {
+			if(0 != stat(CHARSTR(mod->src), &mod->srcstat)) {
 				// no hook for this name exists
 				continue;
 			}
-			straddn(&mod->dest, STRANDLEN(mod->name));
+			straddstr(&mod->dest, mod->name);
 			stradd(&mod->dest, ".so");
 			*(strreserve(&mod->dest, 1)) = '\0';
 
@@ -136,7 +139,7 @@ static void load(const string location, struct modules modules, const string pro
 	for(i=0;i<modules.len;++i) {
 		struct module* mod = modules.D + i;
 		if(!mod->islib) continue;
-		if(0 != stat(mod->dest.base, &mod->deststat)) {
+		if(0 != stat(CHARSTR(mod->dest), &mod->deststat)) {
 			continue;
 		}
 		if(mod->srcstat.st_mtime < mod->deststat.st_mtime) continue;
@@ -247,16 +250,16 @@ void hook_run(struct event_base* eventbase, const string name, struct continuati
 				munmap(mem,sizeof(sem_t));
 			}
 			event_reinit(eventbase);
-			char* args[] = { hook->u.path.base, NULL };
-			execv(hook->u.path.base,args);
+			char* args[] = { (char*)hook->u.path.base, NULL };
+			execv((char*)hook->u.path.base,args);
 			if(errno == ENOEXEC || errno == EACCES) {
 				perror("trying shell, since");
 				printf("hook %.*s\n",STRING_FOR_PRINTF(hook->u.path));
-				char* args[] = { "sh", hook->u.path.base, NULL };
+				char* args[] = { "sh", (char*)hook->u.path.base, NULL };
 				execv("/bin/sh",args);
 				perror("nope");
 			}
-			perror(hook->u.path.base);
+			record(ERROR, "%.*s", STRING_FOR_PRINTF(hook->u.path));
 			abort();
 		}
 		
@@ -278,7 +281,7 @@ void hooks_init(struct event_base* eventbase, const string project) {
 	bstring location = {};
 	/* note: it's useless to set LD_LIBRARY_PATH here, and ld.so has no other way for us to do
 	   so other than HURR DURR IM GOOD PROGRAMMER I MAKE THE BYTES */
-	location.len = strlen(getcwd(strreserve(&location, PATH_MAX), PATH_MAX));
+	location.len = strlen(getcwd((char*)strreserve(&location, PATH_MAX), PATH_MAX));
 	*strreserve(&location, 1) = '\0';
 	struct module modulestore[] = {
 #define ONE(lit) { .name = LITSTR(lit) }

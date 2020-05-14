@@ -1,4 +1,7 @@
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
+
 #include "ops.h"
 #include "repo.h"
 #include "net.h"
